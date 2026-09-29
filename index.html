@@ -197,18 +197,30 @@
       touch-action: pan-x pan-y; width: 100%; flex: none;
       -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
     }
-    .event .lbl-l { display: none; }
+    /* 같은 날·같은 유형을 한 줄로 묶는 그룹: [상장] 진코스텍, 멜콘 */
+    .evg {
+      border-left: 4px solid var(--blue); padding: 0 5px; width: 100%; flex: none;
+      font-size: 11.5px; line-height: 1.15; font-weight: 850;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
+    }
+    .evg .event {
+      display: inline; width: auto; padding: 0; border: 0; font: inherit; color: inherit;
+      overflow: visible; white-space: inherit; cursor: pointer;
+    }
+    .evg-tag { cursor: default; }
+    @media (min-width: 900px) { .evg-tag::after { content: " "; white-space: pre; } } /* PC만 대괄호 뒤 한 칸 */
     .event.done { opacity: .6; text-decoration: line-through; }
     .event.active { outline: 2px solid rgba(47, 125, 90, .5); outline-offset: -1px; }
     .event.dragging { opacity: .3; }
     .event.drag-armed { transform: scale(1.04); box-shadow: 0 4px 12px rgba(0,0,0,.22); background: var(--panel); position: relative; z-index: 2; }
-    .event.st-demand1, .event.st-demand3, .event.st-demand5 { border-left-color: #3b7dc9; color: #3b7dc9; }
-    .event.st-allocation { border-left-color: #d9a441; color: #9c6b13; }
-    .event.st-subscription { border-left-color: #4a4f54; color: #4a4f54; }
-    .event.st-payment { border-left-color: #2fb39c; color: #1f8a76; }
-    .event.st-listing { border-left-color: #c94f3e; color: #c94f3e; }
-    .event.st-work { border-left-color: #5b6b73; color: #5b6b73; }
-    .event.st-ir { border-left-color: #5b6b73; color: #5b6b73; }
+    .evg.st-demand1, .evg.st-demand3, .evg.st-demand5, .event.st-demand1, .event.st-demand3, .event.st-demand5 { border-left-color: #3b7dc9; color: #3b7dc9; }
+    .evg.st-allocation, .event.st-allocation { border-left-color: #d9a441; color: #9c6b13; }
+    .evg.st-subscription, .event.st-subscription { border-left-color: #4a4f54; color: #4a4f54; }
+    .evg.st-payment, .event.st-payment { border-left-color: #2fb39c; color: #1f8a76; }
+    .evg.st-listing, .event.st-listing { border-left-color: #c94f3e; color: #c94f3e; }
+    .evg.st-work, .event.st-work { border-left-color: #5b6b73; color: #5b6b73; }
+    .evg.st-ir, .event.st-ir { border-left-color: #5b6b73; color: #5b6b73; }
     .more { font-size: 12px; color: var(--muted); font-weight: 900; padding-left: 3px; background: none; border: none; cursor: pointer; text-align: left; }
     .day.drag-over { background: #e0f1e8; box-shadow: inset 0 0 0 2px var(--green); }
     .drag-ghost { box-shadow: var(--shadow); border-radius: 4px; opacity: .95; }
@@ -435,8 +447,7 @@
         min-height: 0; padding: 0 2px; border-left-width: 3px; font-weight: 800;
         display: block; white-space: nowrap; text-overflow: clip; /* 한 줄로 표시 */
       }
-      .event .lbl-s { display: none; }
-      .event .lbl-l { display: inline; }
+      .evg { font-size: 10px; line-height: 1.1; letter-spacing: -.3px; padding: 0 2px; border-left-width: 3px; font-weight: 800; text-overflow: clip; }
     }
 
     /* ---------- 넓은 화면 ---------- */
@@ -1255,7 +1266,7 @@
   function fitDayEvents() {
     document.querySelectorAll("#calendar .day-events").forEach((box) => {
       box.querySelectorAll(".more").forEach((m) => m.remove());
-      const evs = [...box.querySelectorAll(".event")];
+      const evs = [...box.querySelectorAll(".evg")];
       evs.forEach((e) => { e.style.display = ""; });
       if (viewMode !== "calendar" || !evs.length) return;
       if (box.scrollHeight <= box.clientHeight) return;
@@ -1267,7 +1278,7 @@
       let hidden = 0;
       for (let i = evs.length - 1; i >= 0; i--) {
         evs[i].style.display = "none";
-        hidden++;
+        hidden += evs[i].querySelectorAll(".event").length;
         more.textContent = "+" + hidden;
         if (box.scrollHeight <= box.clientHeight) break;
       }
@@ -1511,6 +1522,13 @@
     "2027-12-25": "성탄절", "2027-12-27": "대체공휴일"
   };
 
+  // 같은 날 같은 유형(수요1/3/5는 각각, 업무·IR도 각각)끼리 묶기 — 첫 등장 순서(=표시 우선순위) 유지
+  function groupByStage(items) {
+    const map = new Map();
+    items.forEach((t) => { if (!map.has(t.stage)) map.set(t.stage, { stage: t.stage, items: [] }); map.get(t.stage).items.push(t); });
+    return [...map.values()];
+  }
+
   function renderCalendar() {
     const y = viewDate.getFullYear(), m = viewDate.getMonth();
     document.getElementById("monthTitle").textContent = `${y}년 ${m + 1}월`;
@@ -1539,9 +1557,7 @@
           <div class="date ${dow === 0 || holidayName ? "sun" : ""} ${dow === 6 && !holidayName ? "sat" : ""}">${day.getDate()}</div>
           ${holidayName ? `<div class="holiday-name">${esc(holidayName)}</div>` : ""}
           <div class="day-events">
-            ${shown.map((t) => `
-              <button class="event st-${t.stage} ${taskDone(t) ? "done" : ""} ${t.id === selectedId ? "active" : ""}" data-id="${t.id}" title="[${stageLabel[t.stage]}] ${esc(t.stock)}${t.broker ? `(${esc(t.broker)})` : ""}">
-<span class="lbl-s">${stageShort[t.stage]} </span><span class="lbl-l">[${stageLabel[t.stage]}]</span>${esc(t.stock)}</button>`).join("")}
+            ${groupByStage(shown).map((g) => `<div class="evg st-${g.stage}"><span class="evg-tag">[${stageLabel[g.stage]}]</span>${g.items.map((t, n) => `${n ? ", " : ""}<span role="button" class="event st-${t.stage} ${taskDone(t) ? "done" : ""} ${t.id === selectedId ? "active" : ""}" data-id="${t.id}" title="[${stageLabel[t.stage]}] ${esc(t.stock)}${t.broker ? `(${esc(t.broker)})` : ""}">${esc(t.stock)}</span>`).join("")}</div>`).join("")}
             ${rest > 0 ? `<button type="button" class="more" data-daylist="${dIso}">+${rest}</button>` : ""}
           </div>
         </div>`;
@@ -1566,7 +1582,7 @@
     });
     document.querySelectorAll(".day").forEach((d) => {
       d.addEventListener("click", (e) => {
-        if (e.target.closest(".event") || e.target.closest("[data-daylist]")) return; // 일정·더보기 클릭은 각자 핸들러가 처리
+        if (e.target.closest(".evg") || e.target.closest("[data-daylist]")) return; // 일정·더보기 클릭은 각자 핸들러가 처리
         if (Date.now() < suppressClickUntil) return;
         quickAddDate = d.dataset.date;
         openDialog("scheduleTypeDialog");
@@ -1662,16 +1678,16 @@
       lastDragAt = Date.now();
       if (ev.type === "pointercancel") return;
       const day = dayAt(ev.clientX, ev.clientY);
-      if (day) applyDrop(taskId, day.dataset.date, dropIndex(day, ev.clientY));
+      if (day) applyDrop(taskId, day.dataset.date, dropIndex(day, ev.clientX, ev.clientY));
     }
     document.addEventListener("pointermove", onMove, { passive: false });
     document.addEventListener("pointerup", onUp);
     document.addEventListener("pointercancel", onUp);
   }
   function dayAt(x, y) { const el = document.elementFromPoint(x, y); return el ? el.closest(".day") : null; }
-  function dropIndex(day, y) {
+  function dropIndex(day, x, y) {
     const list = [...day.querySelectorAll(".event:not(.dragging)")];
-    const before = list.find((i) => { const b = i.getBoundingClientRect(); return y < b.top + b.height / 2; });
+    const before = list.find((i) => { const b = i.getBoundingClientRect(); return y < b.top || (y <= b.bottom && x < b.left + b.width / 2); });
     return before ? list.indexOf(before) : list.length;
   }
   function applyDrop(taskId, newDate, index) {
