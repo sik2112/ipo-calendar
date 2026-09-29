@@ -635,7 +635,8 @@
       <h2 id="dayListTitle">일정</h2>
       <div id="dayListItems" class="daylist"></div>
       <div class="modal-actions">
-        <button class="btn" type="button" data-close="dayListDialog" style="grid-column:1/3">닫기</button>
+        <button class="btn" type="button" data-close="dayListDialog">닫기</button>
+        <button class="btn primary" type="button" id="dayListAdd">+ 일정 추가</button>
       </div>
     </div>
   </div>
@@ -1584,12 +1585,15 @@
       d.addEventListener("click", (e) => {
         if (e.target.closest(".evg") || e.target.closest("[data-daylist]")) return; // 일정·더보기 클릭은 각자 핸들러가 처리
         if (Date.now() < suppressClickUntil) return;
+        if (window.matchMedia("(max-width: 899px)").matches) { openDayList(d.dataset.date); return; } // 모바일: 날짜를 누르면 그날 일정 팝업 (등록은 팝업의 [+ 일정 추가] 버튼으로)
         quickAddDate = d.dataset.date;
         openDialog("scheduleTypeDialog");
       });
     });
   }
+  let dayListDate = null;
   function openDayList(dIso) {
+    dayListDate = dIso;
     const items = filteredTasks().filter((t) => t.date === dIso)
       .sort((a, b) => (stagePriority[a.stage] ?? 9) - (stagePriority[b.stage] ?? 9) || (a.order || 0) - (b.order || 0));
     const d = new Date(`${dIso}T00:00:00`);
@@ -2159,25 +2163,9 @@
     }, { passive: false });
   })();
 
-  /* ---------- 표(간트) 보기: 모바일 스와이프 / PC 마우스 휠로 월 이동 ---------- */
+  /* ---------- 표(간트) 보기: PC 마우스 휠로 월 이동 (모바일은 좌우 스와이프 없음 — 표를 옆으로 밀어 볼 때 월이 넘어가지 않도록, 월 이동은 버튼으로만) ---------- */
   (function ganttNav() {
     const el = document.getElementById("ganttWrap");
-    let sx = 0, sy = 0, tracking = false;
-    el.addEventListener("touchstart", (e) => {
-      if (e.target.closest(".gantt-cell")) { tracking = false; return; }
-      const t = e.touches[0];
-      sx = t.clientX; sy = t.clientY; tracking = true;
-    }, { passive: true });
-    el.addEventListener("touchend", (e) => {
-      if (!tracking) return;
-      tracking = false;
-      const t = e.changedTouches[0];
-      const dx = t.clientX - sx, dy = t.clientY - sy;
-      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-        viewDate.setMonth(viewDate.getMonth() + (dx < 0 ? 1 : -1));
-        render();
-      }
-    }, { passive: true });
     let cooldown = false;
     el.addEventListener("wheel", (e) => {
       if (Math.abs(e.deltaY) < Math.abs(e.deltaX)) return; // 표 가로 스크롤(날짜 넘기기)은 그대로 둠
@@ -2247,6 +2235,11 @@
     toast(next ? "완료 처리했습니다" : "완료를 해제했습니다");
   });
 
+  document.getElementById("dayListAdd").addEventListener("click", () => {
+    quickAddDate = dayListDate;
+    closeDialog("dayListDialog");
+    openDialog("scheduleTypeDialog");
+  });
   document.getElementById("openSchedule").addEventListener("click", () => {
     closeDrawer();
     quickAddDate = null;
