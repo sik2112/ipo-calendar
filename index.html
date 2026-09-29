@@ -790,9 +790,26 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+  <!-- 로그인 화면: 허용된 구글 계정으로 로그인해야 앱이 열림 -->
+  <div id="loginGate" style="display:none">
+    <div class="login-box">
+      <h2>IPO 일정</h2>
+      <p id="loginMsg">로그인이 필요합니다</p>
+      <button id="loginBtn" type="button">Google로 로그인</button>
+    </div>
+  </div>
+  <style>
+    #loginGate { position: fixed; inset: 0; z-index: 2000; align-items: center; justify-content: center; background: var(--panel, #fff); }
+    #loginGate .login-box { text-align: center; padding: 24px; max-width: 320px; }
+    #loginGate h2 { margin: 0 0 8px; font-size: 22px; }
+    #loginGate p { margin: 0 0 18px; color: var(--muted, #666); line-height: 1.5; word-break: keep-all; }
+    #loginGate button { padding: 12px 20px; font-size: 15px; font-weight: 800; border: 0; border-radius: 10px; background: var(--green, #2f7d5a); color: #fff; cursor: pointer; }
+  </style>
+
   <!-- Firebase (PC/모바일 실시간 동기화) -->
   <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
   <script>
   /* ============================================================
      저장소 레이어 — Realtime Database 연동
@@ -811,6 +828,7 @@
   };
   firebase.initializeApp(firebaseConfig);
   const db = firebase.database();
+  const auth = firebase.auth();
   const STATE_REF = db.ref("ipoApp/state");
 
   // 내가 방금 올린 변경이 리스너로 되돌아와서 다시 저장을 트리거하는 걸 막는 플래그
@@ -2428,8 +2446,17 @@
 
   render();
 
-  // Realtime Database 실시간 동기화: 다른 기기에서 바뀐 내용을 받아서 화면에 반영
-  STATE_REF.on("value", (snapshot) => {
+  // ---------- 로그인 + Realtime Database 실시간 동기화 ----------
+  // 허용된 구글 계정으로 로그인한 뒤에만 동기화를 시작합니다 (접근 제한은 Firebase 규칙에서 처리).
+  const loginGate = document.getElementById("loginGate");
+  let deniedMsg = "";
+  let syncStarted = false;
+  function showGate() {
+    document.getElementById("loginMsg").textContent = deniedMsg || "로그인이 필요합니다";
+    deniedMsg = "";
+    loginGate.style.display = "flex";
+  }
+  function onRemote(snapshot) {
     const data = snapshot.val();
     applyingRemote = true;
     if (data) {
@@ -2440,9 +2467,36 @@
     render();
     applyingRemote = false;
     if (!data) STATE_REF.set(state); // 클라우드가 정말 비어있을 때만, 동기화 완료 후 내 데이터를 최초 업로드
-  }, (err) => {
-    console.warn(err);
-    toast("동기화 연결 실패 - firebaseConfig 값을 확인해주세요");
+  }
+  function startSync() {
+    if (syncStarted) return;
+    syncStarted = true;
+    STATE_REF.on("value", onRemote, (err) => {
+      console.warn(err);
+      if (err && err.code === "PERMISSION_DENIED") {
+        deniedMsg = "이 계정은 접근 권한이 없습니다. 허용된 구글 계정으로 다시 로그인해주세요.";
+        auth.signOut();
+      } else {
+        toast("동기화 연결 실패 - 인터넷 연결을 확인해주세요");
+      }
+    });
+  }
+  function stopSync() {
+    STATE_REF.off("value");
+    syncStarted = false;
+    cloudSynced = false;
+  }
+  auth.onAuthStateChanged((user) => {
+    if (user) { loginGate.style.display = "none"; startSync(); }
+    else { stopSync(); showGate(); }
+  });
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest("#loginBtn")) return;
+    auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch((err) => {
+      console.warn(err);
+      deniedMsg = "로그인에 실패했습니다. 팝업 차단을 해제하고 다시 시도해주세요.";
+      showGate();
+    });
   });
   </script>
 </body>
