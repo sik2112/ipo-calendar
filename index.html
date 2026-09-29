@@ -201,17 +201,17 @@
     .evg {
       border-left: 4px solid var(--blue); padding: 0 5px; width: 100%; flex: none;
       font-size: 11.5px; line-height: 1.15; font-weight: 850;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      display: flex; align-items: flex-start; overflow: hidden;
       -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
     }
+    .evg-names { min-width: 0; flex: 1; }
     .evg .event {
       display: inline; width: auto; padding: 0; border: 0; font: inherit; color: inherit;
-      overflow: visible; white-space: inherit; cursor: pointer;
+      overflow: visible; white-space: nowrap; cursor: pointer;
     }
-    .evg-tag { cursor: default; }
+    .evg-tag { flex: none; white-space: pre; cursor: default; }
     @media (min-width: 900px) { .evg-tag::after { content: " "; white-space: pre; } } /* PC만 대괄호 뒤 한 칸 */
     .event.done { opacity: .6; text-decoration: line-through; }
-    .event.active { outline: 2px solid rgba(47, 125, 90, .5); outline-offset: -1px; }
     .event.dragging { opacity: .3; }
     .event.drag-armed { transform: scale(1.04); box-shadow: 0 4px 12px rgba(0,0,0,.22); background: var(--panel); position: relative; z-index: 2; }
     .evg.st-demand1, .evg.st-demand3, .evg.st-demand5, .event.st-demand1, .event.st-demand3, .event.st-demand5 { border-left-color: #3b7dc9; color: #3b7dc9; }
@@ -447,7 +447,7 @@
         min-height: 0; padding: 0 2px; border-left-width: 3px; font-weight: 800;
         display: block; white-space: nowrap; text-overflow: clip; /* 한 줄로 표시 */
       }
-      .evg { font-size: 10px; line-height: 1.1; letter-spacing: -.3px; padding: 0 2px; border-left-width: 3px; font-weight: 800; text-overflow: clip; }
+      .evg { font-size: 10px; line-height: 1.1; letter-spacing: -.3px; padding: 0 2px; border-left-width: 3px; font-weight: 800; }
     }
 
     /* ---------- 넓은 화면 ---------- */
@@ -1557,7 +1557,7 @@
           <div class="date ${dow === 0 || holidayName ? "sun" : ""} ${dow === 6 && !holidayName ? "sat" : ""}">${day.getDate()}</div>
           ${holidayName ? `<div class="holiday-name">${esc(holidayName)}</div>` : ""}
           <div class="day-events">
-            ${groupByStage(shown).map((g) => `<div class="evg st-${g.stage}"><span class="evg-tag">[${stageLabel[g.stage]}]</span>${g.items.map((t, n) => `${n ? ", " : ""}<span role="button" class="event st-${t.stage} ${taskDone(t) ? "done" : ""} ${t.id === selectedId ? "active" : ""}" data-id="${t.id}" title="[${stageLabel[t.stage]}] ${esc(t.stock)}${t.broker ? `(${esc(t.broker)})` : ""}">${esc(t.stock)}</span>`).join("")}</div>`).join("")}
+            ${groupByStage(shown).map((g) => `<div class="evg st-${g.stage}"><span class="evg-tag">[${stageLabel[g.stage]}]</span><span class="evg-names">${g.items.map((t, n) => `${n ? ", " : ""}<span role="button" class="event st-${t.stage} ${taskDone(t) ? "done" : ""} " data-id="${t.id}" title="[${stageLabel[t.stage]}] ${esc(t.stock)}${t.broker ? `(${esc(t.broker)})` : ""}">${esc(t.stock)}</span>`).join("")}</span></div>`).join("")}
             ${rest > 0 ? `<button type="button" class="more" data-daylist="${dIso}">+${rest}</button>` : ""}
           </div>
         </div>`;
