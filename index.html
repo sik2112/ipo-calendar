@@ -1,7 +1,9 @@
 <!--
   ipo-schedule-app.html
-  버전: v1.4.19 · 최종 수정: 2026-09-28
+  버전: v1.4.21 · 최종 수정: 2026-10-01
   변경 이력:
+    v1.4.21 (2026-10-01): 달력 묶음 줄 태그의 수요1/3/5를 "수1/수3/수5"로 줄여 [상장]·[청약] 등과 괄호 폭 통일
+    v1.4.20 (2026-10-01): 상단 월 이동 버튼을 테두리 없는 "‹ 오늘 ›" 형태로 통합(오늘 버튼을 검색줄에서 상단으로 이동)
     v1.4.19 (2026-09-28): 사이드바 "내 캘린더" 맨 위에 "전체" 체크박스 추가 - IPO·업무 등 모든 그룹을 한 번에 켜고 끄기
     v1.4.18 (2026-09-28): 모바일 달력 일정을 한 줄로 표시하고 "[수요1]종목명" 형식으로 변경(PC는 기존 "수1 종목명" 유지),
                           일정이 많아 칸이 넘치면 그 칸만 글자를 자동으로 줄여(최소 7px) 칸 안 스크롤 없이 모두 보이게 함
@@ -122,7 +124,16 @@
     .title-block { text-align: center; min-width: 0; }
     .title-block h1 { margin: 0; font-size: 19px; letter-spacing: -.2px; }
     .title-block .muted { font-size: 11px; }
-    .nav-group { display: flex; gap: 6px; align-items: center; }
+    .nav-group { display: flex; gap: 2px; align-items: center; }
+    /* 테두리·배경 없는 글자형 월 이동 버튼 (‹ 오늘 ›) */
+    .nav-btn {
+      border: 0; background: transparent; color: var(--ink);
+      min-width: 36px; height: 42px; padding: 0 4px; border-radius: 8px;
+      font-size: 22px; line-height: 1; display: grid; place-items: center;
+    }
+    .nav-btn.today { min-width: 44px; padding: 0 8px; font-size: 14px; font-weight: 800; }
+    .nav-btn:active { background: rgba(0, 0, 0, .08); }
+    @media (hover: hover) { .nav-btn:hover { background: rgba(0, 0, 0, .05); } }
 
     .subbar {
       display: flex; gap: 8px; align-items: center; padding: 8px 12px;
@@ -478,8 +489,9 @@
         <h1 id="monthTitle">-</h1>
       </div>
       <div class="nav-group">
-        <button class="icon-btn" id="prevMonth" aria-label="이전 달">‹</button>
-        <button class="icon-btn" id="nextMonth" aria-label="다음 달">›</button>
+        <button class="nav-btn" id="prevMonth" aria-label="이전 달">‹</button>
+        <button class="nav-btn today" id="todayBtn" aria-label="오늘로 이동">오늘</button>
+        <button class="nav-btn" id="nextMonth" aria-label="다음 달">›</button>
       </div>
     </header>
 
@@ -487,7 +499,6 @@
       <input class="search" id="searchInput" type="search" placeholder="일정 검색">
       <button class="filter-pill" id="filterPill"><span id="filterPillText">전체</span></button>
       <button class="filter-pill" id="viewToggleBtn">표 보기</button>
-      <button class="btn sm" id="todayBtn">오늘</button>
     </div>
 
     <div class="cal-wrap" id="calWrap">
@@ -648,7 +659,7 @@
       <div class="form-grid">
         <label>종목명<input id="stockName" required placeholder="예: A바이오"></label>
         <label>증권사<input id="stockBroker" placeholder="예: 한국투자증권"></label>
-        <label class="chk-inline" style="grid-column:1/3"><input type="checkbox" id="stockIsSpac"> 스팩 종목 (수요예측 1일만 진행 — 수요3·수요5 생략)</label>
+        <label class="chk-inline" style="grid-column:1/3"><input type="checkbox" id="stockIsSpac"> 스팩 종목 (수요1만 진행 — 종목명에 '스팩'이 있으면 자동 적용)</label>
         <label>수요예측 시작일(수요1)<input id="dateDemand1" type="date" required></label>
         <label style="display:none"><input id="dateDemand3" type="date" required></label>
         <label style="display:none"><input id="dateDemand5" type="date" required></label>
@@ -876,6 +887,8 @@
   const stageKey = { "수요1": "demand1", "수요3": "demand3", "수요5": "demand5", "배정": "allocation", "청약": "subscription", "납입": "payment", "상장": "listing" };
   const stageLabel = { demand1: "수요1", demand3: "수요3", demand5: "수요5", allocation: "배정", subscription: "청약", payment: "납입", listing: "상장", work: "업무", ir: "IR" };
   const stageShort = { demand1: "수1", demand3: "수3", demand5: "수5", allocation: "배", subscription: "청", payment: "납", listing: "상", work: "업", ir: "IR" };
+  // 달력 묶음 줄 태그용: 수요만 두 글자로 줄여 [상장]·[청약] 등과 괄호 폭을 맞춤
+  const stageTag = { ...stageLabel, demand1: "수1", demand3: "수3", demand5: "수5" };
   // 달력 알약·사이드바 점·상세 태그에 쓰는 색(가독성 위주). 표(간트) 채우기 색은 renderGantt의 stageFill을 따로 씀
   const stageColor = { demand1: "#3b7dc9", demand3: "#3b7dc9", demand5: "#3b7dc9", allocation: "#9c6b13", subscription: "#4a4f54", payment: "#1f8a76", listing: "#c94f3e", work: "#5b6b73", ir: "#5b6b73" };
   // 같은 날 여러 단계가 겹칠 때 위에서부터 보여줄 순서 (상장 > 납입 > 청약 > 수요예측 > 배정 > 업무/IR)
@@ -1146,8 +1159,9 @@
   }
 
   /* ---------- 데이터 ---------- */
+  const isSpacName = (name) => /스팩/.test(name || ""); // 종목명에 '스팩'이 들어가면 스팩으로 간주
   function makeIpoTasks(stock, dates, startOrder = 0, broker = "", isSpac = false) {
-    const useStages = isSpac ? stages.filter((s) => s !== "수요3" && s !== "수요5") : stages;
+    const useStages = (isSpac || isSpacName(stock)) ? stages.filter((s) => s !== "수요3" && s !== "수요5") : stages;
     return useStages.map((stage, i) => {
       const key = stageKey[stage];
       return {
@@ -1558,7 +1572,7 @@
           <div class="date ${dow === 0 || holidayName ? "sun" : ""} ${dow === 6 && !holidayName ? "sat" : ""}">${day.getDate()}</div>
           ${holidayName ? `<div class="holiday-name">${esc(holidayName)}</div>` : ""}
           <div class="day-events">
-            ${groupByStage(shown).map((g) => `<div class="evg st-${g.stage}"><span class="evg-tag">[${stageLabel[g.stage]}]</span><span class="evg-names">${g.items.map((t, n) => `${n ? ", " : ""}<span role="button" class="event st-${t.stage} ${taskDone(t) ? "done" : ""} " data-id="${t.id}" title="[${stageLabel[t.stage]}] ${esc(t.stock)}${t.broker ? `(${esc(t.broker)})` : ""}">${esc(t.stock)}</span>`).join("")}</span></div>`).join("")}
+            ${groupByStage(shown).map((g) => `<div class="evg st-${g.stage}"><span class="evg-tag">[${stageTag[g.stage]}]</span><span class="evg-names">${g.items.map((t, n) => `${n ? ", " : ""}<span role="button" class="event st-${t.stage} ${taskDone(t) ? "done" : ""} " data-id="${t.id}" title="[${stageLabel[t.stage]}] ${esc(t.stock)}${t.broker ? `(${esc(t.broker)})` : ""}">${esc(t.stock)}</span>`).join("")}</span></div>`).join("")}
             ${rest > 0 ? `<button type="button" class="more" data-daylist="${dIso}">+${rest}</button>` : ""}
           </div>
         </div>`;
@@ -2465,6 +2479,22 @@
     deniedMsg = "";
     loginGate.style.display = "flex";
   }
+  // 이미 등록된 스팩 종목의 수요3·수요5를 확인 후 삭제 (체크한 항목·첨부파일이 있는 일정은 건드리지 않음)
+  let spacCleanupAsked = false;
+  function offerSpacCleanup() {
+    if (spacCleanupAsked) return;
+    spacCleanupAsked = true;
+    const targets = state.tasks.filter((t) => t.type === "ipo" && isSpacName(t.stock)
+      && (t.stage === "demand3" || t.stage === "demand5")
+      && !t.checklist.some((i) => i.done) && !(t.attachments || []).length);
+    if (!targets.length) return;
+    const names = [...new Set(targets.map((t) => t.stock))];
+    if (!confirm(`스팩 종목(${names.join(", ")})의 수요3·수요5 일정 ${targets.length}건을 삭제할까요?\n(스팩은 수요1만 진행합니다)`)) return;
+    const ids = new Set(targets.map((t) => t.id));
+    state.tasks = state.tasks.filter((t) => !ids.has(t.id));
+    render();
+    toast(`스팩 수요3·수요5 ${targets.length}건을 삭제했습니다`);
+  }
   function onRemote(snapshot) {
     const data = snapshot.val();
     applyingRemote = true;
@@ -2476,6 +2506,7 @@
     render();
     applyingRemote = false;
     if (!data) STATE_REF.set(state); // 클라우드가 정말 비어있을 때만, 동기화 완료 후 내 데이터를 최초 업로드
+    else setTimeout(offerSpacCleanup, 400);
   }
   function startSync() {
     if (syncStarted) return;
