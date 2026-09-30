@@ -1,7 +1,8 @@
 <!--
   ipo-schedule-app.html
-  버전: v1.4.22 · 최종 수정: 2026-10-01
+  버전: v1.4.23 · 최종 수정: 2026-10-01
   변경 이력:
+    v1.4.23 (2026-10-01): 달력 태그 괄호 폭을 고정(3em)해 수1·수3·수5·청약·배정·납입·상장·업무·IR 모두 [ ] 위치 통일
     v1.4.22 (2026-10-01): 달력 태그의 수요 숫자를 전각(수１·수３·수５)으로 바꿔 [청약]·[상장]과 괄호 폭을 완전히 통일
     v1.4.21 (2026-10-01): 달력 묶음 줄 태그의 수요1/3/5를 "수1/수3/수5"로 줄여 [상장]·[청약] 등과 괄호 폭 통일
     v1.4.20 (2026-10-01): 상단 월 이동 버튼을 테두리 없는 "‹ 오늘 ›" 형태로 통합(오늘 버튼을 검색줄에서 상단으로 이동)
@@ -222,6 +223,9 @@
       overflow: visible; white-space: nowrap; cursor: pointer;
     }
     .evg-tag { flex: none; white-space: pre; cursor: default; }
+    /* 태그 폭 고정: [ 와 ] 위치를 모든 유형(수1·청약·상장·IR 등)에서 동일하게 */
+    .evg-tg { display: inline-flex; justify-content: space-between; width: 3em; vertical-align: baseline; }
+    .evg-tg i { font-style: normal; }
     @media (min-width: 900px) { .evg-tag::after { content: " "; white-space: pre; } } /* PC만 대괄호 뒤 한 칸 */
     .event.done { opacity: .6; text-decoration: line-through; }
     .event.dragging { opacity: .3; }
@@ -1573,7 +1577,7 @@
           <div class="date ${dow === 0 || holidayName ? "sun" : ""} ${dow === 6 && !holidayName ? "sat" : ""}">${day.getDate()}</div>
           ${holidayName ? `<div class="holiday-name">${esc(holidayName)}</div>` : ""}
           <div class="day-events">
-            ${groupByStage(shown).map((g) => `<div class="evg st-${g.stage}"><span class="evg-tag">[${stageTag[g.stage]}]</span><span class="evg-names">${g.items.map((t, n) => `${n ? ", " : ""}<span role="button" class="event st-${t.stage} ${taskDone(t) ? "done" : ""} " data-id="${t.id}" title="[${stageLabel[t.stage]}] ${esc(t.stock)}${t.broker ? `(${esc(t.broker)})` : ""}">${esc(t.stock)}</span>`).join("")}</span></div>`).join("")}
+            ${groupByStage(shown).map((g) => `<div class="evg st-${g.stage}"><span class="evg-tag"><span class="evg-tg"><i>[</i><i>${stageTag[g.stage]}</i><i>]</i></span></span><span class="evg-names">${g.items.map((t, n) => `${n ? ", " : ""}<span role="button" class="event st-${t.stage} ${taskDone(t) ? "done" : ""} " data-id="${t.id}" title="[${stageLabel[t.stage]}] ${esc(t.stock)}${t.broker ? `(${esc(t.broker)})` : ""}">${esc(t.stock)}</span>`).join("")}</span></div>`).join("")}
             ${rest > 0 ? `<button type="button" class="more" data-daylist="${dIso}">+${rest}</button>` : ""}
           </div>
         </div>`;
