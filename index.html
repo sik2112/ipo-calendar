@@ -1,7 +1,8 @@
 <!--
   ipo-schedule-app.html
-  버전: v1.4.23 · 최종 수정: 2026-10-01
+  버전: v1.4.24 · 최종 수정: 2026-10-01
   변경 이력:
+    v1.4.24 (2026-10-01): 달력 태그의 IR을 전각(ＩＲ)으로 바꿔 괄호 안 글자가 한글 태그처럼 넓게 차도록 조정
     v1.4.23 (2026-10-01): 달력 태그 괄호 폭을 고정(3em)해 수1·수3·수5·청약·배정·납입·상장·업무·IR 모두 [ ] 위치 통일
     v1.4.22 (2026-10-01): 달력 태그의 수요 숫자를 전각(수１·수３·수５)으로 바꿔 [청약]·[상장]과 괄호 폭을 완전히 통일
     v1.4.21 (2026-10-01): 달력 묶음 줄 태그의 수요1/3/5를 "수1/수3/수5"로 줄여 [상장]·[청약] 등과 괄호 폭 통일
@@ -893,7 +894,7 @@
   const stageLabel = { demand1: "수요1", demand3: "수요3", demand5: "수요5", allocation: "배정", subscription: "청약", payment: "납입", listing: "상장", work: "업무", ir: "IR" };
   const stageShort = { demand1: "수1", demand3: "수3", demand5: "수5", allocation: "배", subscription: "청", payment: "납", listing: "상", work: "업", ir: "IR" };
   // 달력 묶음 줄 태그용: 수요만 두 글자로 줄여 [상장]·[청약] 등과 괄호 폭을 맞춤
-  const stageTag = { ...stageLabel, demand1: "수１", demand3: "수３", demand5: "수５" }; // 숫자는 전각(１３５)으로 써서 한글 한 글자와 폭을 맞춤
+  const stageTag = { ...stageLabel, demand1: "수１", demand3: "수３", demand5: "수５", ir: "ＩＲ" }; // 숫자는 전각(１３５)으로 써서 한글 한 글자와 폭을 맞춤
   // 달력 알약·사이드바 점·상세 태그에 쓰는 색(가독성 위주). 표(간트) 채우기 색은 renderGantt의 stageFill을 따로 씀
   const stageColor = { demand1: "#3b7dc9", demand3: "#3b7dc9", demand5: "#3b7dc9", allocation: "#9c6b13", subscription: "#4a4f54", payment: "#1f8a76", listing: "#c94f3e", work: "#5b6b73", ir: "#5b6b73" };
   // 같은 날 여러 단계가 겹칠 때 위에서부터 보여줄 순서 (상장 > 납입 > 청약 > 수요예측 > 배정 > 업무/IR)
