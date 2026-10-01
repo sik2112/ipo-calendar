@@ -1,7 +1,9 @@
 <!--
   ipo-schedule-app.html
-  버전: v1.4.28 · 최종 수정: 2026-10-01
+  버전: v1.5.0 · 최종 수정: 2026-10-01
   변경 이력:
+    v1.5.0 (2026-10-01): IPO 그룹에 "해제"(확약 해제·매도일) 추가 — 상장과 같은 빨강, 종목 상세창 "해제 일정 추가"로 종목별 여러 건 등록, 사이드바·달력·표 보기 반영
+    v1.4.29 (2026-10-01): [버그 수정] 저장된 데이터가 없는 첫 실행(새 기기·시크릿 창)에서 isSpacName 초기화 순서 오류로 화면이 비던 문제 수정
     v1.4.28 (2026-10-01): PC에서 사이드바의 "일정 등록"·"가져오기" 버튼을 눌러도 사이드바가 닫히지 않게 변경(모바일은 기존대로 닫힘)
     v1.4.27 (2026-10-01): 같은 날 수요 일정 표시 순서를 수1 → 수3 → 수5(위→아래)로 고정
     v1.4.26 (2026-10-01): PC에서 빈 화면(어두운 영역)을 눌러 상세창을 닫을 때 왼쪽 사이드바가 같이 닫히던 문제 수정
@@ -239,7 +241,8 @@
     .evg.st-allocation, .event.st-allocation { border-left-color: #d9a441; color: #9c6b13; }
     .evg.st-subscription, .event.st-subscription { border-left-color: #4a4f54; color: #4a4f54; }
     .evg.st-payment, .event.st-payment { border-left-color: #2fb39c; color: #1f8a76; }
-    .evg.st-listing, .event.st-listing { border-left-color: #c94f3e; color: #c94f3e; }
+    .evg.st-listing, .event.st-listing,
+    .evg.st-release, .event.st-release { border-left-color: #c94f3e; color: #c94f3e; }
     .evg.st-work, .event.st-work { border-left-color: #5b6b73; color: #5b6b73; }
     .evg.st-ir, .event.st-ir { border-left-color: #5b6b73; color: #5b6b73; }
     .more { font-size: 12px; color: var(--muted); font-weight: 900; padding-left: 3px; background: none; border: none; cursor: pointer; text-align: left; }
@@ -585,6 +588,19 @@
   </section>
 
   <!-- 종목 전체 날짜 일괄 수정 -->
+  <div class="sheet" id="releaseDialog">
+    <div class="modal" id="releaseForm">
+      <h2 id="releaseDialogTitle">해제 일정 추가</h2>
+      <div class="form-grid">
+        <label>해제 날짜<input id="releaseDate" type="date" required></label>
+      </div>
+      <div class="hint">확약한 종목만 추가하세요. 구간이 여러 개면 날짜별로 여러 번 추가할 수 있습니다.</div>
+      <div class="modal-actions">
+        <button class="btn" type="button" data-close="releaseDialog">취소</button>
+        <button class="btn primary" type="button" data-submit="releaseForm">추가</button>
+      </div>
+    </div>
+  </div>
   <div class="sheet" id="editDatesDialog">
     <div class="modal" id="editDatesForm">
       <h2 id="editDatesTitle">전체 일정 날짜 수정</h2>
@@ -895,20 +911,20 @@
 
   const stages = ["수요1", "수요3", "수요5", "배정", "청약", "납입", "상장"];
   const stageKey = { "수요1": "demand1", "수요3": "demand3", "수요5": "demand5", "배정": "allocation", "청약": "subscription", "납입": "payment", "상장": "listing" };
-  const stageLabel = { demand1: "수요1", demand3: "수요3", demand5: "수요5", allocation: "배정", subscription: "청약", payment: "납입", listing: "상장", work: "업무", ir: "IR" };
-  const stageShort = { demand1: "수1", demand3: "수3", demand5: "수5", allocation: "배", subscription: "청", payment: "납", listing: "상", work: "업", ir: "IR" };
+  const stageLabel = { demand1: "수요1", demand3: "수요3", demand5: "수요5", allocation: "배정", subscription: "청약", payment: "납입", listing: "상장", release: "해제", work: "업무", ir: "IR" };
+  const stageShort = { demand1: "수1", demand3: "수3", demand5: "수5", allocation: "배", subscription: "청", payment: "납", listing: "상", release: "해", work: "업", ir: "IR" };
   // 달력 묶음 줄 태그용: 수요만 두 글자로 줄여 [상장]·[청약] 등과 괄호 폭을 맞춤
   const stageTag = { ...stageLabel, demand1: "수１", demand3: "수３", demand5: "수５", ir: "ＩＲ" }; // 숫자는 전각(１３５)으로 써서 한글 한 글자와 폭을 맞춤
   // 달력 알약·사이드바 점·상세 태그에 쓰는 색(가독성 위주). 표(간트) 채우기 색은 renderGantt의 stageFill을 따로 씀
-  const stageColor = { demand1: "#3b7dc9", demand3: "#3b7dc9", demand5: "#3b7dc9", allocation: "#9c6b13", subscription: "#4a4f54", payment: "#1f8a76", listing: "#c94f3e", work: "#5b6b73", ir: "#5b6b73" };
+  const stageColor = { demand1: "#3b7dc9", demand3: "#3b7dc9", demand5: "#3b7dc9", allocation: "#9c6b13", subscription: "#4a4f54", payment: "#1f8a76", listing: "#c94f3e", release: "#c94f3e", work: "#5b6b73", ir: "#5b6b73" }; // 해제는 매도일이라 상장과 같은 빨강
   // 같은 날 여러 단계가 겹칠 때 위에서부터 보여줄 순서 (상장 > 납입 > 청약 > 수요예측 > 배정 > 업무/IR)
   const stagePriority = {
-    listing: 1, payment: 2, subscription: 3,
+    listing: 1, release: 1.1, payment: 2, subscription: 3,
     demand1: 4, demand3: 4.1, demand5: 4.2, // 수요는 수1 → 수3 → 수5 순(위→아래)
     allocation: 5, work: 6, ir: 6
   };
   // 단계별 마감/기준 시각 기본값 (task.time 이 없을 때 사용)
-  const stageDefaultTime = { demand1: "16:00", demand3: "16:00", demand5: "16:00", allocation: "12:00", subscription: "16:00", payment: "12:00", listing: "09:00", work: "09:00", ir: "09:00" };
+  const stageDefaultTime = { demand1: "16:00", demand3: "16:00", demand5: "16:00", allocation: "12:00", subscription: "16:00", payment: "12:00", listing: "09:00", release: "09:00", work: "09:00", ir: "09:00" };
   // 알림 규칙: atTime = 절대 시각(날짜 오프셋 기준) / beforeDueMinutes = task.time(마감 시각) 기준 역산
   // 이 규칙표 덕분에 "전날 오후 5시" 같은 문구가 실제 계산 가능한 시각으로 바뀝니다. (텔레그램 자동 알림용)
   const demandReminderRules = [
@@ -941,6 +957,10 @@
       { label: "당일 장 시작 전", offsetDays: 0, atTime: "08:30" },
       { label: "상장 확인 후", offsetDays: 0, atTime: "09:30" }
     ],
+    release: [
+      { label: "전날 오후 5시", offsetDays: -1, atTime: "17:00" },
+      { label: "당일 장 시작 전", offsetDays: 0, atTime: "08:30" }
+    ],
     work: [
       { label: "당일 오전 9시", offsetDays: 0, atTime: "09:00" }
     ],
@@ -955,7 +975,8 @@
     allocation: [["배정 결과표 확인", "최종 배정 수량 확인"], ["내부 승인 요청", "담당자 승인 기록"], ["배정 안내 발송", "관련 부서 공유"], ["시스템 값 입력", "배정 정보 등록"], ["다음 단계 일정 확인", "청약 알림 연결"]],
     subscription: [["청약 시작 상태 확인", "접수 채널 확인"], ["청약 경쟁률 업데이트", "중간/최종 집계"], ["고객 안내 문구 확인", "마감 안내 확인"], ["마감 후 결과 취합", "최종 결과 정리"], ["납입 일정 확인", "납입 알림 연결"]],
     payment: [["납입 대상 금액 확인", "금액 대조"], ["입금 상태 체크", "미납 항목 확인"], ["회계 처리 요청", "담당자 공유"], ["증빙 파일 첨부", "자료 정리"], ["상장 일정 확인", "상장 알림 연결"]],
-    listing: [["상장일 거래 시작 확인", "장 시작 전 상태 확인"], ["상장 공지 확인", "안내 상태 확인"], ["첫 거래 데이터 기록", "시초가 입력"], ["상장 완료 보고", "완료 보고 작성"], ["첨부파일 정리", "임시 자료 삭제 확인"]]
+    listing: [["상장일 거래 시작 확인", "장 시작 전 상태 확인"], ["상장 공지 확인", "안내 상태 확인"], ["첫 거래 데이터 기록", "시초가 입력"], ["상장 완료 보고", "완료 보고 작성"], ["첨부파일 정리", "임시 자료 삭제 확인"]],
+    release: [["해제 물량 확인", "확약 해제 수량·기간 확인"], ["매도 처리", "매도 주문/체결 기록"]]
   };
 
   const today = new Date();
@@ -979,7 +1000,8 @@
         { id: "allocation", label: "배정", stage: "allocation" },
         { id: "subscription", label: "청약", stage: "subscription" },
         { id: "payment", label: "납입", stage: "payment" },
-        { id: "listing", label: "상장", stage: "listing" }
+        { id: "listing", label: "상장", stage: "listing" },
+        { id: "release", label: "해제", stage: "release" }
       ]},
       { id: "work", label: "업무", children: [
         { id: "work", label: "업무", stage: "work" },
@@ -988,7 +1010,7 @@
     ];
   }
   let categoryGroups = defaultCategoryGroups();
-  let visibleStages = { demand1: true, demand3: true, demand5: true, allocation: true, subscription: true, payment: true, listing: true, work: true, ir: true };
+  let visibleStages = { demand1: true, demand3: true, demand5: true, allocation: true, subscription: true, payment: true, listing: true, release: true, work: true, ir: true };
 
   // 개별 알림 추가 시트의 "알림 시점" 드롭다운 선택지 (네이버캘린더 알림 방식 참고)
   const reminderOffsetOptions = [
@@ -1169,7 +1191,7 @@
   }
 
   /* ---------- 데이터 ---------- */
-  const isSpacName = (name) => /스팩/.test(name || ""); // 종목명에 '스팩'이 들어가면 스팩으로 간주
+  function isSpacName(name) { return /스팩/.test(name || ""); } // 종목명에 '스팩'이 들어가면 스팩으로 간주 (선언문: 저장 데이터가 없는 첫 실행에서도 먼저 호출 가능)
   function makeIpoTasks(stock, dates, startOrder = 0, broker = "", isSpac = false) {
     const useStages = (isSpac || isSpacName(stock)) ? stages.filter((s) => s !== "수요3" && s !== "수요5") : stages;
     return useStages.map((stage, i) => {
@@ -1320,7 +1342,7 @@
     // 최종 확정 배색: 수요예측=파랑, 배정=노랑, 청약=진회색, 납입=민트, 상장=빨강
     const ganttColor = {
       demand1: "#3b7dc9", demand3: "#3b7dc9", demand5: "#3b7dc9",
-      allocation: "#d9a441", subscription: "#4a4f54", payment: "#2fb39c", listing: "#c94f3e"
+      allocation: "#d9a441", subscription: "#4a4f54", payment: "#2fb39c", listing: "#c94f3e", release: "#c94f3e"
     };
     const ganttText = { allocation: "#4a350c", payment: "#04332c" };
 
@@ -1328,7 +1350,7 @@
     const stockOrder = [];
     filteredTasks().filter((t) => t.type === "ipo").forEach((t) => {
       if (!byStock[t.stock]) { byStock[t.stock] = { broker: t.broker, stages: {} }; stockOrder.push(t.stock); }
-      byStock[t.stock].stages[t.stage] = t;
+      byStock[t.stock].stages[t.stage === "release" ? t.id : t.stage] = t; // 해제는 여러 건일 수 있어 id로 구분
     });
     const stocks = stockOrder
       .filter((name) => Object.values(byStock[name].stages).some((t) => {
@@ -1809,6 +1831,10 @@
         ${task.type === "ipo"
           ? `<div class="btn-row">
               <button class="btn" id="editAllDatesBtn">날짜 일괄 수정</button>
+              <button class="btn" id="addReleaseBtn">해제 일정 추가</button>
+            </div>
+            <div class="btn-row">
+              ${task.stage === "release" ? `<button class="btn danger" id="deleteRelease">이 해제 일정 삭제</button>` : ""}
               <button class="btn danger" id="deleteStock">${esc(task.stock)} 전체 일정 삭제</button>
             </div>`
           : `<button class="btn danger" id="deleteStock">${task.stage === "ir" ? "이 IR 삭제" : "이 업무 삭제"}</button>`}
@@ -1901,6 +1927,21 @@
         document.getElementById("editDatePayment").value = byStage.payment?.date || "";
         document.getElementById("editDateListing").value = byStage.listing?.date || "";
         openDialog("editDatesDialog");
+      });
+    }
+    if (task.type === "ipo") {
+      body.querySelector("#addReleaseBtn").addEventListener("click", () => {
+        document.getElementById("releaseDialogTitle").textContent = `${task.stock} 해제 일정 추가`;
+        document.getElementById("releaseDate").value = "";
+        openDialog("releaseDialog", "releaseDate");
+      });
+      body.querySelector("#deleteRelease")?.addEventListener("click", () => {
+        if (!confirm(`"${task.stock}" 해제 일정(${prettyDate(task.date)})을 삭제할까요?`)) return;
+        state.tasks = state.tasks.filter((t) => t.id !== task.id);
+        selectedId = null;
+        closeDetail();
+        render();
+        toast("해제 일정을 삭제했습니다");
       });
     }
     body.querySelector("#deleteStock").addEventListener("click", () => {
@@ -2318,6 +2359,20 @@
     const b = e.target.value;
     if (!b) return;
     document.getElementById("editDateAllocation").value = subBizDays(b, 1);
+  });
+  onSubmit("releaseForm", () => {
+    const t = selectedTask();
+    if (!t) return;
+    const date = document.getElementById("releaseDate").value;
+    const nt = {
+      id: uid("task"), type: "ipo", stock: t.stock, broker: t.broker, stage: "release", date, time: stageDefaultTime.release,
+      order: Math.max(0, ...state.tasks.map((x) => x.order || 0)) + 1, customReminders: [], attachments: [], cleanupNeeded: false,
+      checklist: templates.release.map(([title, note]) => ({ title, note, done: false }))
+    };
+    state.tasks.push(nt);
+    viewDate = new Date(`${date}T00:00:00`); viewDate.setDate(1);
+    closeDialog("releaseDialog"); render();
+    toast(`${t.stock} 해제 일정을 추가했습니다`);
   });
   onSubmit("editDatesForm", () => {
     const t = selectedTask();
