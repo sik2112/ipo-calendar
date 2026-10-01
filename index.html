@@ -1,7 +1,8 @@
 <!--
   ipo-schedule-app.html
-  버전: v1.4.27 · 최종 수정: 2026-10-01
+  버전: v1.4.28 · 최종 수정: 2026-10-01
   변경 이력:
+    v1.4.28 (2026-10-01): PC에서 사이드바의 "일정 등록"·"가져오기" 버튼을 눌러도 사이드바가 닫히지 않게 변경(모바일은 기존대로 닫힘)
     v1.4.27 (2026-10-01): 같은 날 수요 일정 표시 순서를 수1 → 수3 → 수5(위→아래)로 고정
     v1.4.26 (2026-10-01): PC에서 빈 화면(어두운 영역)을 눌러 상세창을 닫을 때 왼쪽 사이드바가 같이 닫히던 문제 수정
     v1.4.25 (2026-10-01): Esc 키로 왼쪽 사이드바가 닫히지 않도록 변경(☰ 버튼으로만 열고 닫음)
@@ -1930,6 +1931,10 @@
   }
   function openDrawer() { document.getElementById("drawer").classList.add("on"); syncScrim(); }
   function closeDrawer() { document.getElementById("drawer").classList.remove("on"); syncScrim(); }
+  // 모바일에서만 사이드바를 닫음(PC는 ☰ 버튼으로만 닫음) — 사이드바 안의 버튼(일정 등록·가져오기 등)용
+  function closeDrawerOnMobile() {
+    if (!window.matchMedia("(min-width: 900px)").matches) closeDrawer();
+  }
   function toggleDrawer() {
     const isOpen = document.getElementById("drawer").classList.contains("on");
     if (isOpen) closeDrawer(); else openDrawer();
@@ -2268,7 +2273,7 @@
     openDialog("scheduleTypeDialog");
   });
   document.getElementById("openSchedule").addEventListener("click", () => {
-    closeDrawer();
+    closeDrawerOnMobile();
     quickAddDate = null;
     openDialog("scheduleTypeDialog");
   });
@@ -2466,7 +2471,7 @@
   });
   document.getElementById("importBtn").addEventListener("click", () => {
     document.getElementById("importText").value = "";
-    closeDrawer();
+    closeDrawerOnMobile();
     openDialog("importDialog", "importText");
   });
   onSubmit("importForm", () => {
