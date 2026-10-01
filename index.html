@@ -1,7 +1,8 @@
 <!--
   ipo-schedule-app.html
-  버전: v1.4.24 · 최종 수정: 2026-10-01
+  버전: v1.4.25 · 최종 수정: 2026-10-01
   변경 이력:
+    v1.4.25 (2026-10-01): Esc 키로 왼쪽 사이드바가 닫히지 않도록 변경(☰ 버튼으로만 열고 닫음)
     v1.4.24 (2026-10-01): 달력 태그의 IR을 전각(ＩＲ)으로 바꿔 괄호 안 글자가 한글 태그처럼 넓게 차도록 조정
     v1.4.23 (2026-10-01): 달력 태그 괄호 폭을 고정(3em)해 수1·수3·수5·청약·배정·납입·상장·업무·IR 모두 [ ] 위치 통일
     v1.4.22 (2026-10-01): 달력 태그의 수요 숫자를 전각(수１·수３·수５)으로 바꿔 [청약]·[상장]과 괄호 폭을 완전히 통일
@@ -2106,7 +2107,7 @@
     if (e.key !== "Escape") return;
     const open = document.querySelector(".sheet.open");
     if (open) { closeDialog(open.id); return; }
-    closeDetail(); closeDrawer();
+    closeDetail(); // 왼쪽 사이드바는 Esc로 닫히지 않음(☰ 버튼으로만 열고 닫음)
   });
   document.querySelectorAll(".field-clear").forEach((b) => {
     b.addEventListener("click", () => {
