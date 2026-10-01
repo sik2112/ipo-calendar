@@ -1,7 +1,8 @@
 <!--
   ipo-schedule-app.html
-  버전: v1.4.25 · 최종 수정: 2026-10-01
+  버전: v1.4.26 · 최종 수정: 2026-10-01
   변경 이력:
+    v1.4.26 (2026-10-01): PC에서 빈 화면(어두운 영역)을 눌러 상세창을 닫을 때 왼쪽 사이드바가 같이 닫히던 문제 수정
     v1.4.25 (2026-10-01): Esc 키로 왼쪽 사이드바가 닫히지 않도록 변경(☰ 버튼으로만 열고 닫음)
     v1.4.24 (2026-10-01): 달력 태그의 IR을 전각(ＩＲ)으로 바꿔 괄호 안 글자가 한글 태그처럼 넓게 차도록 조정
     v1.4.23 (2026-10-01): 달력 태그 괄호 폭을 고정(3em)해 수1·수3·수5·청약·배정·납입·상장·업무·IR 모두 [ ] 위치 통일
@@ -1938,7 +1939,11 @@
   document.getElementById("menuBtn").addEventListener("click", toggleDrawer);
   // PC(900px 이상)에서는 사이드바를 열린 상태로 시작, 모바일은 닫힌 상태 유지
   if (window.matchMedia("(min-width: 900px)").matches) openDrawer();
-  scrim.addEventListener("click", () => { closeDrawer(); closeDetail(); });
+  scrim.addEventListener("click", () => {
+    closeDetail();
+    // PC(900px 이상)에서는 사이드바를 ☰ 버튼으로만 닫음 (빈 화면을 눌러 상세창을 닫을 때 함께 사라지지 않게)
+    if (!window.matchMedia("(min-width: 900px)").matches) closeDrawer();
+  });
   let sheetSwiped = false;
   document.getElementById("detailSheet").querySelector(".grab-zone").addEventListener("click", () => {
     if (sheetSwiped) { sheetSwiped = false; return; }
