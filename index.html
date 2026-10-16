@@ -1,7 +1,9 @@
 <!--
   ipo-schedule-app.html
-  버전: v1.5.0 · 최종 수정: 2026-10-01
+  버전: v1.5.1 · 최종 수정: 2026-10-16
   변경 이력:
+    v1.5.1 (2026-10-16): 공유 사용자별 숨김 유형 지원(ipoApp/viewerPrefs/{uid}/hidden) — 해당 유형을 달력·표·사이드바에서 제외,
+                          보기 전용 계정에서 반복되던 "동기화 실패" 알림 제거
     v1.5.0 (2026-10-01): IPO 그룹에 "해제"(확약 해제·매도일) 추가 — 상장과 같은 빨강, 종목 상세창 "해제 일정 추가"로 종목별 여러 건 등록, 사이드바·달력·표 보기 반영
     v1.4.29 (2026-10-01): [버그 수정] 저장된 데이터가 없는 첫 실행(새 기기·시크릿 창)에서 isSpacName 초기화 순서 오류로 화면이 비던 문제 수정
     v1.4.28 (2026-10-01): PC에서 사이드바의 "일정 등록"·"가져오기" 버튼을 눌러도 사이드바가 닫히지 않게 변경(모바일은 기존대로 닫힘)
@@ -885,6 +887,7 @@
   // 클라우드의 진짜 값을 한 번이라도 받아오기 전에는, 페이지 최초 렌더가
   // 로컬 캐시/예시 데이터를 클라우드로 밀어올려 덮어쓰지 않도록 막는 플래그
   let cloudSynced = false;
+  let readOnly = false; // 보기 전용 계정이면 저장 시도를 멈춤
 
   const Store = {
     KEY: "ipoScheduleApp.v2",
@@ -900,8 +903,10 @@
       try { localStorage.setItem(this.KEY, JSON.stringify(state)); } catch (e) { /* 로컬 캐시 실패는 무시 */ }
       if (applyingRemote) return true; // 방금 받은 원격 변경은 다시 올리지 않음
       if (!cloudSynced) return true; // 클라우드 초기값을 받기 전에는 올리지 않음 (덮어쓰기 방지)
+      if (readOnly) return true; // 보기 전용 계정은 저장 안 함
       STATE_REF.set(state).catch((e) => {
         console.warn(e);
+        if (e && e.code === "PERMISSION_DENIED") { readOnly = true; return; }
         toast("동기화 실패 - 인터넷 연결을 확인해주세요");
       });
       return true;
@@ -1011,6 +1016,17 @@
   }
   let categoryGroups = defaultCategoryGroups();
   let visibleStages = { demand1: true, demand3: true, demand5: true, allocation: true, subscription: true, payment: true, listing: true, release: true, work: true, ir: true };
+  // 공유받은 사람별로 아예 숨길 유형 (Firebase ipoApp/viewerPrefs/{uid}/hidden 에서 읽음)
+  let hiddenStages = {};
+  // 숨김 유형을 뺀 사이드바 그룹 (하위 항목이 다 숨겨진 그룹은 통째로 제외)
+  function visibleGroups() {
+    return categoryGroups
+      .map((g) => ({ ...g, children: g.children.filter((c) => {
+        const cs = c.stages || (c.stage ? [c.stage] : []);
+        return !cs.length || !cs.every((s) => hiddenStages[s]);
+      }) }))
+      .filter((g) => g.children.length);
+  }
 
   // 개별 알림 추가 시트의 "알림 시점" 드롭다운 선택지 (네이버캘린더 알림 방식 참고)
   const reminderOffsetOptions = [
@@ -1269,7 +1285,7 @@
   /* ---------- 필터 ---------- */
   // 빠른 보기(전체/정리 필요/완료) — 상단 "필터" 알약 → 하단 시트에서만 사용
   function filterDefs() {
-    const c = (fn) => state.tasks.filter(fn).length;
+    const c = (fn) => state.tasks.filter((t) => !hiddenStages[t.stage]).filter(fn).length;
     return [
       ["all", "전체", c(() => true)],
       ["cleanup", "첨부 정리 필요", c((t) => t.cleanupNeeded)],
@@ -1283,6 +1299,7 @@
   function filteredTasks() {
     const q = search.trim();
     return state.tasks
+      .filter((t) => !hiddenStages[t.stage])
       .filter((t) => visibleStages[t.stage] !== false)
       .filter((t) => {
         if (filter === "cleanup") return t.cleanupNeeded;
@@ -1421,7 +1438,7 @@
   /* ---------- 사이드바 카테고리 체크박스 트리 ---------- */
   function childStages(c) { return c.stages || (c.stage ? [c.stage] : []); }
   function categoryTreeHtml() {
-    const groupsHtml = categoryGroups.map((g) => {
+    const groupsHtml = visibleGroups().map((g) => {
       const stageIds = g.children.flatMap(childStages);
       const allOn = stageIds.length === 0 || stageIds.every((s) => visibleStages[s] !== false);
       const someOn = stageIds.some((s) => visibleStages[s] !== false);
@@ -1448,7 +1465,7 @@
           <div class="tree-children">${childHtml}</div>
         </div>`;
     }).join("");
-    const allStageIds = categoryGroups.flatMap((g) => g.children.flatMap(childStages));
+    const allStageIds = visibleGroups().flatMap((g) => g.children.flatMap(childStages));
     const everyOn = allStageIds.every((s) => visibleStages[s] !== false);
     const allHtml = `
         <div class="tree-group">
@@ -1463,7 +1480,7 @@
     const root = document.getElementById("filters");
     root.innerHTML = categoryTreeHtml();
     // "전체" 체크박스: 모든 그룹의 모든 단계를 한 번에 켜고 끄기
-    const allIds = categoryGroups.flatMap((g) => g.children.flatMap(childStages));
+    const allIds = visibleGroups().flatMap((g) => g.children.flatMap(childStages));
     const chkAll = root.querySelector(".chk-all");
     chkAll.indeterminate = !chkAll.checked && allIds.some((s) => visibleStages[s] !== false);
     chkAll.addEventListener("change", () => {
@@ -1471,7 +1488,7 @@
       render();
     });
     root.querySelectorAll(".chk-group").forEach((el) => {
-      const group = categoryGroups.find((g) => g.id === el.dataset.group);
+      const group = visibleGroups().find((g) => g.id === el.dataset.group);
       const stageIds = group.children.flatMap(childStages);
       const someOn = stageIds.some((s) => visibleStages[s] !== false);
       el.indeterminate = !el.checked && someOn;
@@ -2599,8 +2616,18 @@
     syncStarted = false;
     cloudSynced = false;
   }
+  let prefsRef = null;
   auth.onAuthStateChanged((user) => {
-    if (user) { loginGate.style.display = "none"; startSync(); }
+    if (prefsRef) { prefsRef.off("value"); prefsRef = null; }
+    hiddenStages = {};
+    readOnly = false;
+    if (user) {
+      loginGate.style.display = "none";
+      // 이 계정에 지정된 숨김 유형을 실시간으로 읽음 (값이 없으면 전부 보임)
+      prefsRef = db.ref(`ipoApp/viewerPrefs/${user.uid}/hidden`);
+      prefsRef.on("value", (snap) => { hiddenStages = snap.val() || {}; render(); }, (err) => console.warn(err));
+      startSync();
+    }
     else { stopSync(); showGate(); }
   });
   document.addEventListener("click", (e) => {
