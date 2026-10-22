@@ -1,7 +1,15 @@
 <!--
   ipo-schedule-app.html
-  버전: v1.5.1 · 최종 수정: 2026-10-16
+  버전: v1.6.1 · 최종 수정: 2026-10-22
   변경 이력:
+    v1.6.1 (2026-10-22): 상세창에서 체크리스트·알림·첨부파일과 상단 "알림 N개" 칸 삭제(기존 데이터도 삭제),
+                          완료 여부는 일정별 done 값 하나로 단순화하고 본인만 보이는 위치(ipoApp/ownerOnly)에 저장
+                          — 달력 취소선은 본인 화면에만 표시, 사이드바 빠른 보기의 "첨부 정리 필요" 삭제
+    v1.6.0 (2026-10-22): 캘린더 권한 분리 — 공모주(ipoApp/public)·내부(ipoApp/private) 두 위치로 나눠 저장,
+                          A그룹(groupA)은 둘 다, B그룹(allowedUsers)은 공모주(수1·수3·수5·청약·납입·상장)만 받음,
+                          공모주 일정의 체크리스트·알림·첨부는 내부(private/memos)에 따로 저장해 B그룹에 안 보임,
+                          보기 전용 계정에는 등록·수정·삭제 버튼 숨김, 사람별 숨김(viewerPrefs) 기능 삭제,
+                          변경이 없을 때는 클라우드에 다시 쓰지 않음(무료 한도 절약)
     v1.5.1 (2026-10-16): 공유 사용자별 숨김 유형 지원(ipoApp/viewerPrefs/{uid}/hidden) — 해당 유형을 달력·표·사이드바에서 제외,
                           보기 전용 계정에서 반복되던 "동기화 실패" 알림 제거
     v1.5.0 (2026-10-01): IPO 그룹에 "해제"(확약 해제·매도일) 추가 — 상장과 같은 빨강, 종목 상세창 "해제 일정 추가"로 종목별 여러 건 등록, 사이드바·달력·표 보기 반영
@@ -459,6 +467,13 @@
     }
     .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+    /* ---------- 보기 전용 계정(A·B그룹): 등록·수정·삭제 버튼 숨김 ---------- */
+    body.viewer #openSchedule, body.viewer #backupSection, body.viewer #dayListAdd,
+    body.viewer .detail-foot, body.viewer #editTitleBtn, body.viewer .add-group-btn,
+    body.viewer #detailBody .btn, body.viewer .routine-item .icon-x { display: none !important; }
+    body.viewer .routine-check, body.viewer #detailDateBox { pointer-events: none; }
+    body.role-b #routineSection { display: none !important; }
+
     @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 
     /* ---------- 모바일: 달력 촘촘하게 (한 칸에 더 많은 일정 표시) ---------- */
@@ -535,7 +550,7 @@
       <div class="mark">IPO</div>
       <div>
         <h2>업무일정</h2>
-        <div class="muted">이 기기에 저장됩니다 · v1.4.19 (2026-09-28)</div>
+        <div class="muted">이 기기에 저장됩니다 · v1.6.1 (2026-10-22)</div>
       </div>
     </div>
     <div class="drawer-body">
@@ -548,12 +563,12 @@
         <div class="tree" id="filters"></div>
       </section>
 
-      <section>
+      <section id="routineSection">
         <div class="group-title">마감예정</div>
         <div id="routineList"></div>
       </section>
 
-      <section>
+      <section id="backupSection">
         <div class="group-title">데이터 백업</div>
         <div class="btn-row">
           <button class="btn sm" id="exportBtn">내보내기</button>
@@ -576,9 +591,8 @@
           <h2 id="detailTitle" style="flex:1; min-width:0">-</h2>
           <button type="button" class="icon-btn" id="editTitleBtn" style="width:34px; height:34px; font-size:15px" aria-label="이름 수정">✎</button>
         </div>
-        <div class="meta">
+        <div class="meta" style="grid-template-columns:1fr">
           <button type="button" class="box" id="detailDateBox"><span>날짜</span><strong id="detailDate">-</strong></button>
-          <div class="box"><span>알림</span><strong id="detailReminderCount">-</strong></div>
         </div>
       </div>
     </div>
@@ -762,55 +776,10 @@
         <label>변경할 날짜<input id="newDate" type="text" readonly required placeholder="날짜 선택"></label>
         <label>마감/기준 시각<input id="newTime" type="time" required></label>
       </div>
-      <div class="hint">알림은 이 시각을 기준으로 자동 계산됩니다.</div>
+      <div class="hint">마감/기준 시각을 함께 정할 수 있습니다.</div>
       <div class="modal-actions">
         <button class="btn" type="button" data-close="dateDialog">취소</button>
         <button class="btn primary" type="button" data-submit="dateForm">변경</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 개별 알림 -->
-  <div class="sheet" id="reminderDialog">
-    <div class="modal" id="reminderForm">
-      <h2>개별 알림 추가</h2>
-      <div class="form-grid">
-        <label>알림 시점<select id="reminderOffset">
-          <option value="0">정시</option>
-          <option value="10">10분 전</option>
-          <option value="30">30분 전</option>
-          <option value="60">1시간 전</option>
-          <option value="180">3시간 전</option>
-          <option value="1440">1일 전</option>
-          <option value="2880">2일 전</option>
-          <option value="custom">직접 입력</option>
-        </select></label>
-        <label>메모(선택)<input id="reminderText" placeholder="예: 담당자에게 전화"></label>
-      </div>
-      <div class="form-grid" id="reminderCustomRow" style="display:none">
-        <label>알림 날짜<input id="reminderCustomDate" type="date"></label>
-        <label>알림 시각<input id="reminderCustomTime" type="time"></label>
-      </div>
-      <div class="hint" id="reminderPreview">-</div>
-      <div class="modal-actions">
-        <button class="btn" type="button" data-close="reminderDialog">취소</button>
-        <button class="btn primary" type="button" data-submit="reminderForm">추가</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 첨부 -->
-  <div class="sheet" id="attachDialog">
-    <div class="modal" id="attachForm">
-      <h2>첨부 링크 추가</h2>
-      <div class="form-grid">
-        <label>이름<input id="attachName" required placeholder="예: 배정내역_1.png"></label>
-        <label>링크<input id="attachUrl" type="url" required placeholder="https://..."></label>
-      </div>
-      <div class="hint">OneDrive나 SharePoint 공유 링크를 붙여넣으세요.</div>
-      <div class="modal-actions">
-        <button class="btn" type="button" data-close="attachDialog">취소</button>
-        <button class="btn primary" type="button" data-submit="attachForm">추가</button>
       </div>
     </div>
   </div>
@@ -880,34 +849,79 @@
   firebase.initializeApp(firebaseConfig);
   const db = firebase.database();
   const auth = firebase.auth();
-  const STATE_REF = db.ref("ipoApp/state");
+  // v1.6.0: 공모주(public)·내부(private) 두 위치로 나눠 저장 — B그룹은 public만 서버에서 받음
+  const OWNER_EMAIL = "hyunsik2112@gmail.com"; // Firebase 규칙의 소유자 이메일과 같은 값
+  const PUBLIC_REF = db.ref("ipoApp/public/state");
+  const PRIVATE_REF = db.ref("ipoApp/private/state");
+  const OWNER_REF = db.ref("ipoApp/ownerOnly/state"); // 본인만 읽음 (완료 여부)
+  const LEGACY_REF = db.ref("ipoApp/state"); // 분리 전(v1.5.1까지) 데이터 — 최초 1회 분리용
+  // B그룹에게도 보이는 유형. 나머지(배정·해제·업무·IR)와 마감예정은 내부
+  const PUBLIC_STAGES = new Set(["demand1", "demand3", "demand5", "subscription", "payment", "listing"]);
+  function isPublicTask(t) { return t.type === "ipo" && PUBLIC_STAGES.has(t.stage); }
+  function toArr(v) { return Array.isArray(v) ? v.filter(Boolean) : (v ? Object.values(v) : []); }
+  // 저장용으로 쪼개기: 일정은 공모주/내부로, 완료 여부(done)는 본인만 읽는 ownerOnly/state/done/{일정ID}로
+  function splitState(s) {
+    const pubTasks = [], privTasks = [], done = {};
+    s.tasks.forEach((t) => {
+      const { done: isDone, checklist, customReminders, attachments, cleanupNeeded, ...base } = t;
+      if (isDone) done[t.id] = true;
+      (isPublicTask(t) ? pubTasks : privTasks).push(base);
+    });
+    return { pub: { tasks: pubTasks }, priv: { tasks: privTasks, routines: s.routines }, own: { done } };
+  }
+  // 화면용으로 합치기 (A·B그룹은 취소선 없음, B그룹은 priv도 없음)
+  function mergeState(pub, priv, own, isOwner) {
+    const memos = (isOwner && priv && priv.memos) || {}; // v1.6.0에서 저장된 체크리스트 — 완료 여부만 넘겨받고 다음 저장 때 사라짐
+    const tasks = [...toArr(pub && pub.tasks), ...toArr(priv && priv.tasks)].map((t) => {
+      const m = { ...t, ...(memos[t.id] || {}) };
+      if (!isOwner) m.done = false;
+      else if (own) m.done = !!(own.done && own.done[t.id]);
+      return m;
+    });
+    return { tasks, routines: toArr(priv && priv.routines) };
+  }
 
   // 내가 방금 올린 변경이 리스너로 되돌아와서 다시 저장을 트리거하는 걸 막는 플래그
   let applyingRemote = false;
   // 클라우드의 진짜 값을 한 번이라도 받아오기 전에는, 페이지 최초 렌더가
-  // 로컬 캐시/예시 데이터를 클라우드로 밀어올려 덮어쓰지 않도록 막는 플래그
+  // 로컬 캐시를 클라우드로 밀어올려 덮어쓰지 않도록 막는 플래그
   let cloudSynced = false;
-  let readOnly = false; // 보기 전용 계정이면 저장 시도를 멈춤
+  let readOnly = true; // 소유자 확인·데이터 분리가 끝나기 전에는 저장하지 않음
+  let role = null;     // "owner" | "A" | "B"
+  let currentUid = null;
+  let lastSent = "";   // 마지막으로 올린 내용 — 같으면 다시 안 올림
+  function canEdit() { return role === "owner" && !readOnly; }
 
   const Store = {
-    KEY: "ipoScheduleApp.v2",
-    // 로컬 캐시: 인터넷이 잠깐 끊겨도 화면이 바로 뜨도록 하는 용도
+    KEY: "ipoScheduleApp.v3",
+    // 로컬 캐시: 인터넷이 잠깐 끊겨도 화면이 바로 뜨도록 하는 용도 (계정별로 구분)
     load() {
       try {
-        const saved = localStorage.getItem(this.KEY);
-        if (saved) return JSON.parse(saved);
+        const c = JSON.parse(localStorage.getItem(this.KEY) || "null");
+        if (c && c.state) return c.state;
       } catch (e) { console.warn(e); }
       return null;
     },
+    cachedUid() {
+      try { return (JSON.parse(localStorage.getItem(this.KEY) || "null") || {}).uid || null; } catch { return null; }
+    },
+    clear() { try { localStorage.removeItem(this.KEY); localStorage.removeItem("ipoScheduleApp.v2"); } catch {} },
     save(state) {
-      try { localStorage.setItem(this.KEY, JSON.stringify(state)); } catch (e) { /* 로컬 캐시 실패는 무시 */ }
+      if (currentUid) {
+        try { localStorage.setItem(this.KEY, JSON.stringify({ uid: currentUid, state })); } catch (e) { /* 로컬 캐시 실패는 무시 */ }
+      }
       if (applyingRemote) return true; // 방금 받은 원격 변경은 다시 올리지 않음
-      if (!cloudSynced) return true; // 클라우드 초기값을 받기 전에는 올리지 않음 (덮어쓰기 방지)
-      if (readOnly) return true; // 보기 전용 계정은 저장 안 함
-      STATE_REF.set(state).catch((e) => {
+      if (!cloudSynced) return true;   // 클라우드 초기값을 받기 전에는 올리지 않음 (덮어쓰기 방지)
+      if (!canEdit()) return true;     // 보기 전용 계정은 저장 안 함
+      const { pub, priv, own } = splitState(state);
+      const json = JSON.stringify([pub, priv, own]);
+      if (json === lastSent) return true; // 필터·월 이동 등 데이터 변화 없는 렌더는 건너뜀
+      lastSent = json;
+      // 세 위치를 한 번에(원자적으로) 저장
+      db.ref("ipoApp").update({ "public/state": pub, "private/state": priv, "ownerOnly/state": own }).catch((e) => {
         console.warn(e);
-        if (e && e.code === "PERMISSION_DENIED") { readOnly = true; return; }
-        toast("동기화 실패 - 인터넷 연결을 확인해주세요");
+        lastSent = "";
+        toast(e && e.code === "PERMISSION_DENIED" ? "저장 권한이 없습니다" : "동기화 실패 - 인터넷 연결을 확인해주세요");
       });
       return true;
     }
@@ -930,60 +944,6 @@
   };
   // 단계별 마감/기준 시각 기본값 (task.time 이 없을 때 사용)
   const stageDefaultTime = { demand1: "16:00", demand3: "16:00", demand5: "16:00", allocation: "12:00", subscription: "16:00", payment: "12:00", listing: "09:00", release: "09:00", work: "09:00", ir: "09:00" };
-  // 알림 규칙: atTime = 절대 시각(날짜 오프셋 기준) / beforeDueMinutes = task.time(마감 시각) 기준 역산
-  // 이 규칙표 덕분에 "전날 오후 5시" 같은 문구가 실제 계산 가능한 시각으로 바뀝니다. (텔레그램 자동 알림용)
-  const demandReminderRules = [
-    { label: "전날 오후 5시", offsetDays: -1, atTime: "17:00" },
-    { label: "당일 오전 9시", offsetDays: 0, atTime: "09:00" },
-    { label: "마감 30분 전", beforeDueMinutes: 30 }
-  ];
-  const reminderRules = {
-    demand1: demandReminderRules,
-    demand3: demandReminderRules,
-    demand5: demandReminderRules,
-    allocation: [
-      { label: "전날 오후 5시", offsetDays: -1, atTime: "17:00" },
-      { label: "당일 오전 9시", offsetDays: 0, atTime: "09:00" },
-      { label: "업무 시작 전", offsetDays: 0, atTime: "08:30" }
-    ],
-    subscription: [
-      { label: "전날 오후 5시", offsetDays: -1, atTime: "17:00" },
-      { label: "당일 오전 9시", offsetDays: 0, atTime: "09:00" },
-      { label: "마감 1시간 전", beforeDueMinutes: 60 },
-      { label: "마감 10분 전", beforeDueMinutes: 10 }
-    ],
-    payment: [
-      { label: "전날 오후 5시", offsetDays: -1, atTime: "17:00" },
-      { label: "당일 오전 9시", offsetDays: 0, atTime: "09:00" },
-      { label: "마감 30분 전", beforeDueMinutes: 30 }
-    ],
-    listing: [
-      { label: "전날 오후 5시", offsetDays: -1, atTime: "17:00" },
-      { label: "당일 장 시작 전", offsetDays: 0, atTime: "08:30" },
-      { label: "상장 확인 후", offsetDays: 0, atTime: "09:30" }
-    ],
-    release: [
-      { label: "전날 오후 5시", offsetDays: -1, atTime: "17:00" },
-      { label: "당일 장 시작 전", offsetDays: 0, atTime: "08:30" }
-    ],
-    work: [
-      { label: "당일 오전 9시", offsetDays: 0, atTime: "09:00" }
-    ],
-    ir: [
-      { label: "당일 오전 9시", offsetDays: 0, atTime: "09:00" }
-    ]
-  };
-  const templates = {
-    demand1: [["기관 수요예측 일정 확인", "시작일 확인"], ["참여 기관 자료 취합 시작", "초기 참여 현황 확인"]],
-    demand3: [["중간 참여 현황 점검", "3일차 경쟁률 확인"], ["희망 공모가 범위 확인", "가격대별 수량 검토"]],
-    demand5: [["최종 결과 취합", "마감일 최종 경쟁률/결과 정리"], ["결과 보고 초안 작성", "내부 공유용 요약 작성"], ["다음 단계 배정 일정 확인", "배정 알림 연결"]],
-    allocation: [["배정 결과표 확인", "최종 배정 수량 확인"], ["내부 승인 요청", "담당자 승인 기록"], ["배정 안내 발송", "관련 부서 공유"], ["시스템 값 입력", "배정 정보 등록"], ["다음 단계 일정 확인", "청약 알림 연결"]],
-    subscription: [["청약 시작 상태 확인", "접수 채널 확인"], ["청약 경쟁률 업데이트", "중간/최종 집계"], ["고객 안내 문구 확인", "마감 안내 확인"], ["마감 후 결과 취합", "최종 결과 정리"], ["납입 일정 확인", "납입 알림 연결"]],
-    payment: [["납입 대상 금액 확인", "금액 대조"], ["입금 상태 체크", "미납 항목 확인"], ["회계 처리 요청", "담당자 공유"], ["증빙 파일 첨부", "자료 정리"], ["상장 일정 확인", "상장 알림 연결"]],
-    listing: [["상장일 거래 시작 확인", "장 시작 전 상태 확인"], ["상장 공지 확인", "안내 상태 확인"], ["첫 거래 데이터 기록", "시초가 입력"], ["상장 완료 보고", "완료 보고 작성"], ["첨부파일 정리", "임시 자료 삭제 확인"]],
-    release: [["해제 물량 확인", "확약 해제 수량·기간 확인"], ["매도 처리", "매도 주문/체결 기록"]]
-  };
-
   const today = new Date();
   let state = loadState();
   let viewDate = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -1016,7 +976,7 @@
   }
   let categoryGroups = defaultCategoryGroups();
   let visibleStages = { demand1: true, demand3: true, demand5: true, allocation: true, subscription: true, payment: true, listing: true, release: true, work: true, ir: true };
-  // 공유받은 사람별로 아예 숨길 유형 (Firebase ipoApp/viewerPrefs/{uid}/hidden 에서 읽음)
+  // B그룹에서 아예 빠지는 유형 (로그인 시 그룹에 따라 정해짐 — 사람별 숨김 기능은 v1.6.0에서 삭제)
   let hiddenStages = {};
   // 숨김 유형을 뺀 사이드바 그룹 (하위 항목이 다 숨겨진 그룹은 통째로 제외)
   function visibleGroups() {
@@ -1027,36 +987,6 @@
       }) }))
       .filter((g) => g.children.length);
   }
-
-  // 개별 알림 추가 시트의 "알림 시점" 드롭다운 선택지 (네이버캘린더 알림 방식 참고)
-  const reminderOffsetOptions = [
-    { value: 0, label: "정시" },
-    { value: 10, label: "10분 전" },
-    { value: 30, label: "30분 전" },
-    { value: 60, label: "1시간 전" },
-    { value: 180, label: "3시간 전" },
-    { value: 1440, label: "1일 전" },
-    { value: 2880, label: "2일 전" }
-  ];
-  function dueDateTime(task) {
-    return new Date(`${task.date}T${task.time || stageDefaultTime[task.stage] || "09:00"}:00`);
-  }
-  function updateReminderPreview(task) {
-    const offset = document.getElementById("reminderOffset").value;
-    const customRow = document.getElementById("reminderCustomRow");
-    if (offset === "custom") {
-      customRow.style.display = "grid";
-      document.getElementById("reminderPreview").textContent = "직접 지정한 날짜·시각을 사용합니다.";
-      return;
-    }
-    customRow.style.display = "none";
-    const due = dueDateTime(task);
-    due.setMinutes(due.getMinutes() - Number(offset));
-    document.getElementById("reminderPreview").textContent = `실제 발송 시각: ${prettyDateTime(isoLocalMinute(due))}`;
-  }
-  document.getElementById("reminderOffset").addEventListener("change", () => {
-    const t = selectedTask(); if (t) updateReminderPreview(t);
-  });
 
   /* ---------- 커스텀 날짜 선택 팝업 ---------- */
   let dpTarget = null, dpMonth = new Date();
@@ -1158,39 +1088,6 @@
     return `${d.getMonth() + 1}월 ${d.getDate()}일 (${wd})`;
   }
 
-  /* ---------- 알림 시각 계산 (텔레그램 자동 발송용) ---------- */
-  function pad2(n) { return String(n).padStart(2, "0"); }
-  function isoLocalMinute(d) {
-    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-  }
-  function prettyDateTime(isoLocalStr) {
-    if (!isoLocalStr) return "-";
-    const d = new Date(isoLocalStr);
-    if (isNaN(d)) return "-";
-    return `${prettyDate(iso(d))} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-  }
-  // rule의 실제 발송 시각을 계산: beforeDueMinutes면 task.time(마감 시각) 기준 역산, 아니면 절대 날짜+시각
-  function ruleDateTime(task, rule) {
-    if (rule.beforeDueMinutes != null) {
-      const due = new Date(`${task.date}T${task.time || stageDefaultTime[task.stage] || "17:00"}:00`);
-      due.setMinutes(due.getMinutes() - rule.beforeDueMinutes);
-      return due;
-    }
-    const d = new Date(`${task.date}T00:00:00`);
-    d.setDate(d.getDate() + (rule.offsetDays || 0));
-    const [h, m] = (rule.atTime || "09:00").split(":").map(Number);
-    d.setHours(h, m, 0, 0);
-    return d;
-  }
-  // 화면 표시 + (나중에) 외부 스크립트가 그대로 읽어 쓸 수 있는 통합 알림 목록
-  function reminderSchedule(task) {
-    const rules = task.date ? (reminderRules[task.stage] || []) : [];
-    const base = rules.map((r) => ({ kind: "base", label: r.label, at: isoLocalMinute(ruleDateTime(task, r)) }));
-    const custom = (task.customReminders || [])
-      .filter((c) => c.at)
-      .map((c) => ({ kind: "custom", label: c.text, at: c.at }));
-    return [...base, ...custom].sort((a, b) => a.at.localeCompare(b.at));
-  }
   let toastTimer;
   function toast(msg) {
     const el = document.getElementById("toast");
@@ -1214,8 +1111,7 @@
       const key = stageKey[stage];
       return {
         id: uid("task"), type: "ipo", stock, broker, stage: key, date: dates[key], time: stageDefaultTime[key],
-        order: startOrder + i, customReminders: [], attachments: [], cleanupNeeded: false,
-        checklist: templates[key].map(([title, note]) => ({ title, note, done: false }))
+        order: startOrder + i, done: false
       };
     });
   }
@@ -1229,27 +1125,19 @@
   function makeWorkTask(title, date, order = 0) {
     return {
       id: uid("task"), type: "work", stock: title, stage: "work", date, time: stageDefaultTime.work,
-      order, customReminders: [], attachments: [], cleanupNeeded: false,
-      checklist: [{ title: "완료", note: "", done: false }]
+      order, done: false
     };
   }
   function makeIrTask(title, date, order = 0) {
     return {
       id: uid("task"), type: "work", stock: title, stage: "ir", date, time: stageDefaultTime.ir,
-      order, customReminders: [], attachments: [], cleanupNeeded: false,
-      checklist: [{ title: "완료", note: "", done: false }]
+      order, done: false
     };
   }
   function loadState() {
     const saved = Store.load();
     if (saved && Array.isArray(saved.tasks)) return normalize(saved);
-    return {
-      tasks: defaultTasks(),
-      routines: [
-        { id: uid("routine"), title: "매일 일지 작성", freq: "일별", dueDate: iso(today), reminder: "평일 오후 5시", done: false },
-        { id: uid("routine"), title: "보고서 제출", freq: "주별", dueDate: iso(today), reminder: "매주 금요일 오전 10시", done: false }
-      ]
-    };
+    return { tasks: [], routines: [] }; // 예시 일정은 넣지 않음 (보기 계정에 잠깐 보이는 문제 방지)
   }
   function normalize(data) {
     return {
@@ -1261,14 +1149,9 @@
           id: t.id || uid("task"), type: t.type || "ipo", stock: t.stock || "(이름 없음)", broker: t.broker || "",
           stage, date: typeof t.date === "string" ? t.date : "", time: t.time || stageDefaultTime[stage] || "09:00",
           order: Number(t.order) || 0,
-          // 예전 버전(문자열 배열)과의 호환: {text, at} 형태로 통일
-          customReminders: Array.isArray(t.customReminders)
-            ? t.customReminders.map((c) => typeof c === "string" ? { text: c, at: null } : { text: c.text || "", at: c.at || null })
-            : [],
-          attachments: Array.isArray(t.attachments) ? t.attachments : [],
-          cleanupNeeded: !!t.cleanupNeeded,
-          checklist: Array.isArray(t.checklist) && t.checklist.length ? t.checklist
-            : (templates[stage] ? templates[stage].map(([title, note]) => ({ title, note, done: false })) : [{ title: "완료", note: "", done: false }])
+          // v1.6.1: 체크리스트·알림·첨부는 삭제. 예전에 체크리스트를 모두 체크한 일정은 완료로 넘김
+          done: typeof t.done === "boolean" ? t.done
+            : (Array.isArray(t.checklist) && t.checklist.length > 0 && t.checklist.every((i) => i && i.done))
         };
       }),
       routines: (data.routines || []).map((r) => ({
@@ -1279,7 +1162,7 @@
     };
   }
   function save() { Store.save(state); }
-  function taskDone(t) { return t.checklist.every((i) => i.done); }
+  function taskDone(t) { return !!t.done; }
   function selectedTask() { return state.tasks.find((t) => t.id === selectedId) || null; }
 
   /* ---------- 필터 ---------- */
@@ -1288,7 +1171,6 @@
     const c = (fn) => state.tasks.filter((t) => !hiddenStages[t.stage]).filter(fn).length;
     return [
       ["all", "전체", c(() => true)],
-      ["cleanup", "첨부 정리 필요", c((t) => t.cleanupNeeded)],
       ["done", "완료", c(taskDone)]
     ];
   }
@@ -1302,7 +1184,6 @@
       .filter((t) => !hiddenStages[t.stage])
       .filter((t) => visibleStages[t.stage] !== false)
       .filter((t) => {
-        if (filter === "cleanup") return t.cleanupNeeded;
         if (filter === "done") return taskDone(t);
         return true;
       })
@@ -1649,6 +1530,7 @@
         if (e.target.closest(".evg") || e.target.closest("[data-daylist]")) return; // 일정·더보기 클릭은 각자 핸들러가 처리
         if (Date.now() < suppressClickUntil) return;
         if (window.matchMedia("(max-width: 899px)").matches) { openDayList(d.dataset.date); return; } // 모바일: 날짜를 누르면 그날 일정 팝업 (등록은 팝업의 [+ 일정 추가] 버튼으로)
+        if (!canEdit()) { openDayList(d.dataset.date); return; } // 보기 계정: 등록 대신 그날 일정 목록
         quickAddDate = d.dataset.date;
         openDialog("scheduleTypeDialog");
       });
@@ -1677,6 +1559,7 @@
     openDialog("dayListDialog");
   }
   function startDrag(ev0, button) {
+    if (!canEdit()) return; // 보기 계정은 일정 이동 불가
     if (ev0.button !== undefined && ev0.button !== 0) return;
     const taskId = button.dataset.id;
     const sx = ev0.clientX, sy = ev0.clientY;
@@ -1774,16 +1657,10 @@
   }
 
   /* ---------- 상세 ---------- */
-  let checklistEditMode = false;
-  let lastChecklistTaskId = null;
   function renderDetail() {
     const task = selectedTask();
     if (!task) return;
-    if (task.id !== lastChecklistTaskId) { checklistEditMode = false; lastChecklistTaskId = task.id; }
     const body = document.getElementById("detailBody");
-    const doneCount = task.checklist.filter((i) => i.done).length;
-    const pct = Math.round(doneCount / task.checklist.length * 100);
-    const schedule = reminderSchedule(task);
 
     const tag = document.getElementById("detailStage");
     tag.textContent = stageLabel[task.stage];
@@ -1791,59 +1668,10 @@
     tag.style.color = stageColor[task.stage];
     document.getElementById("detailTitle").textContent = task.stock + (task.broker ? `(${task.broker})` : "");
     document.getElementById("detailDate").textContent = `${prettyDate(task.date)} ${task.time || ""}`;
-    document.getElementById("detailReminderCount").textContent = `${schedule.length}개`;
     document.getElementById("completeBtn").textContent = taskDone(task) ? "완료 해제" : "업무 완료";
+    if (role !== "owner") { body.innerHTML = ""; return; } // 보기 계정은 버튼 영역 없음 (상세 항목은 나중에 추가 예정)
 
     body.innerHTML = `
-      <section class="section">
-        <div class="section-head"><h3>체크리스트</h3>
-          <div style="display:flex; gap:6px">
-            <button class="btn sm" id="toggleChecklistEdit">${checklistEditMode ? "완료" : "수정"}</button>
-            <button class="btn sm" id="addChecklistItem">+ 항목</button>
-          </div>
-        </div>
-        <div class="muted">${doneCount} / ${task.checklist.length}</div>
-        <div class="progress"><i style="width:${pct}%"></i></div>
-        <div class="tasks">
-          ${task.checklist.map((it, i) => checklistEditMode ? `
-            <div class="task-row">
-              <button type="button" class="task ${it.done ? "done" : ""}" data-check="${i}">
-                <span class="check">${it.done ? "✓" : ""}</span>
-                <span><strong>${esc(it.title)}</strong><small>${esc(it.note)}</small></span>
-              </button>
-              <button type="button" class="icon-x" data-edit-check="${i}" aria-label="항목 수정">✎</button>
-              <button type="button" class="icon-x" data-del-check="${i}" aria-label="항목 삭제">×</button>
-            </div>` : `
-            <button type="button" class="task ${it.done ? "done" : ""}" data-check="${i}">
-              <span class="check">${it.done ? "✓" : ""}</span>
-              <span><strong>${esc(it.title)}</strong><small>${esc(it.note)}</small></span>
-            </button>`).join("")}
-        </div>
-      </section>
-      <section class="section">
-        <div class="section-head"><h3>알림</h3><button class="btn sm" id="addReminder">+ 개별</button></div>
-        <div>
-          <div class="muted">${task.date ? `기본 알림 (마감/기준 시각 ${esc(task.time || "-")} 기준 자동 계산)` : "날짜를 정하면 기본 알림이 자동 계산됩니다"}</div>
-          <div class="chips">${schedule.filter((r) => r.kind === "base").map((r) => `<span class="chip">${esc(r.label)} · ${prettyDateTime(r.at)}</span>`).join("") || `<span class="muted">없음</span>`}</div>
-        </div>
-        <div>
-          <div class="muted">개별 알림</div>
-          <div class="chips" id="customReminders">${task.customReminders.length
-            ? task.customReminders.map((c, n) => `<span class="chip"><span data-edit-reminder="${n}" style="cursor:pointer">${esc(c.text)}${c.at ? ` · ${prettyDateTime(c.at)}` : ""}</span><button data-reminder="${n}" aria-label="삭제">×</button></span>`).join("")
-            : `<span class="muted">없음</span>`}</div>
-        </div>
-      </section>
-      <section class="section ${task.cleanupNeeded ? "cleanup" : ""}">
-        <div class="section-head"><h3>첨부파일 링크</h3><button class="btn sm" id="addAttach">+ 첨부</button></div>
-        <div class="attach-list">
-          ${task.attachments.length ? task.attachments.map((it, i) => `
-            <div class="attach">
-              <a href="${esc(safeUrl(it.url))}" target="_blank" rel="noopener noreferrer">${esc(it.name)}</a>
-              <button class="btn danger sm" data-attach="${i}">삭제</button>
-            </div>`).join("") : `<div class="muted">OneDrive나 SharePoint 링크를 추가하세요.</div>`}
-        </div>
-        ${task.cleanupNeeded ? `<div class="muted">상장이 끝났습니다. 임시 첨부를 정리하세요.</div>` : ""}
-      </section>
       <section class="section">
         ${task.type === "ipo"
           ? `<div class="btn-row">
@@ -1857,80 +1685,6 @@
           : `<button class="btn danger" id="deleteStock">${task.stage === "ir" ? "이 IR 삭제" : "이 업무 삭제"}</button>`}
       </section>`;
 
-    body.querySelectorAll("[data-check]").forEach((row) => {
-      row.addEventListener("click", () => {
-        const it = task.checklist[Number(row.dataset.check)];
-        it.done = !it.done;
-        if (task.stage === "listing" && taskDone(task) && task.attachments.length) task.cleanupNeeded = true;
-        render();
-      });
-    });
-    body.querySelector("#toggleChecklistEdit").addEventListener("click", () => {
-      checklistEditMode = !checklistEditMode;
-      render();
-    });
-    body.querySelector("#addChecklistItem").addEventListener("click", () => {
-      const title = prompt("항목 이름을 입력하세요");
-      if (title === null || !title.trim()) return;
-      const note = prompt("설명 (선택, 비워도 됩니다)") || "";
-      task.checklist.push({ title: title.trim(), note: note.trim(), done: false });
-      render();
-      toast("항목을 추가했습니다");
-    });
-    body.querySelectorAll("[data-edit-check]").forEach((b) => {
-      b.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const it = task.checklist[Number(b.dataset.editCheck)];
-        const title = prompt("항목 이름을 수정하세요", it.title);
-        if (title === null || !title.trim()) return;
-        const note = prompt("설명을 수정하세요 (선택)", it.note || "");
-        it.title = title.trim();
-        it.note = (note || "").trim();
-        render();
-      });
-    });
-    body.querySelectorAll("[data-del-check]").forEach((b) => {
-      b.addEventListener("click", (e) => {
-        e.stopPropagation();
-        if (task.checklist.length <= 1) { toast("체크리스트는 최소 1개가 필요합니다"); return; }
-        const i = Number(b.dataset.delCheck);
-        if (!confirm(`"${task.checklist[i].title}" 항목을 삭제할까요?`)) return;
-        task.checklist.splice(i, 1);
-        render();
-        toast("항목을 삭제했습니다");
-      });
-    });
-    body.querySelector("#addReminder").addEventListener("click", () => {
-      document.getElementById("reminderText").value = "";
-      document.getElementById("reminderOffset").value = "0";
-      document.getElementById("reminderCustomDate").value = task.date;
-      document.getElementById("reminderCustomTime").value = task.time || "09:00";
-      updateReminderPreview(task);
-      openDialog("reminderDialog");
-    });
-    body.querySelector("#customReminders").addEventListener("click", (e) => {
-      const edit = e.target.closest("[data-edit-reminder]");
-      if (edit) {
-        const c = task.customReminders[Number(edit.dataset.editReminder)];
-        const text = prompt("알림 문구를 수정하세요", c.text);
-        if (text === null || !text.trim()) return;
-        c.text = text.trim();
-        render();
-        return;
-      }
-      const b = e.target.closest("[data-reminder]");
-      if (!b) return;
-      task.customReminders.splice(Number(b.dataset.reminder), 1);
-      render();
-    });
-    body.querySelector("#addAttach").addEventListener("click", () => openDialog("attachDialog", "attachName"));
-    body.querySelectorAll("[data-attach]").forEach((b) => {
-      b.addEventListener("click", () => {
-        task.attachments.splice(Number(b.dataset.attach), 1);
-        if (!task.attachments.length) task.cleanupNeeded = false;
-        render();
-      });
-    });
     if (task.type === "ipo") {
       body.querySelector("#editAllDatesBtn").addEventListener("click", () => {
         const byStage = {};
@@ -2272,7 +2026,7 @@
   document.getElementById("filterPill").addEventListener("click", () => openDialog("filterDialog"));
 
   function openDateDialog() {
-    const t = selectedTask(); if (!t) return;
+    const t = selectedTask(); if (!t || !canEdit()) return;
     document.getElementById("newDate").value = t.date;
     document.getElementById("newTime").value = t.time || stageDefaultTime[t.stage] || "09:00";
     openDialog("dateDialog");
@@ -2318,9 +2072,7 @@
   document.getElementById("completeBtn").addEventListener("click", () => {
     const t = selectedTask(); if (!t) return;
     const next = !taskDone(t);
-    if (!next && !confirm("체크리스트 전체가 미완료로 바뀝니다. 계속할까요?")) return;
-    t.checklist.forEach((i) => i.done = next);
-    if (t.stage === "listing" && next && t.attachments.length) t.cleanupNeeded = true;
+    t.done = next;
     render();
     toast(next ? "완료 처리했습니다" : "완료를 해제했습니다");
   });
@@ -2383,8 +2135,7 @@
     const date = document.getElementById("releaseDate").value;
     const nt = {
       id: uid("task"), type: "ipo", stock: t.stock, broker: t.broker, stage: "release", date, time: stageDefaultTime.release,
-      order: Math.max(0, ...state.tasks.map((x) => x.order || 0)) + 1, customReminders: [], attachments: [], cleanupNeeded: false,
-      checklist: templates.release.map(([title, note]) => ({ title, note, done: false }))
+      order: Math.max(0, ...state.tasks.map((x) => x.order || 0)) + 1, done: false
     };
     state.tasks.push(nt);
     viewDate = new Date(`${date}T00:00:00`); viewDate.setDate(1);
@@ -2494,42 +2245,6 @@
     toast("마감예정 업무를 등록했습니다");
   });
 
-  onSubmit("reminderForm", () => {
-    const t = selectedTask();
-    if (!t) return;
-    const offset = document.getElementById("reminderOffset").value;
-    const memo = document.getElementById("reminderText").value.trim();
-    let at, text;
-    if (offset === "custom") {
-      const d = document.getElementById("reminderCustomDate").value;
-      const tm = document.getElementById("reminderCustomTime").value;
-      if (!d || !tm) { toast("날짜와 시각을 입력해주세요"); return; }
-      at = `${d}T${tm}`;
-      text = memo || "직접 지정";
-    } else {
-      const offsetLabel = reminderOffsetOptions.find((o) => o.value === Number(offset))?.label || "정시";
-      const due = dueDateTime(t);
-      due.setMinutes(due.getMinutes() - Number(offset));
-      at = isoLocalMinute(due);
-      text = memo ? `${offsetLabel} · ${memo}` : offsetLabel;
-    }
-    t.customReminders.push({ text, at });
-    document.getElementById("reminderText").value = "";
-    closeDialog("reminderDialog"); render();
-    toast("알림을 추가했습니다");
-  });
-
-  onSubmit("attachForm", () => {
-    const t = selectedTask();
-    const name = document.getElementById("attachName").value.trim();
-    const url = document.getElementById("attachUrl").value.trim();
-    if (!t || !name || !url) return;
-    t.attachments.push({ name, url });
-    document.getElementById("attachName").value = "";
-    document.getElementById("attachUrl").value = "";
-    closeDialog("attachDialog"); render();
-  });
-
   document.getElementById("exportBtn").addEventListener("click", async () => {
     const text = JSON.stringify(state, null, 2);
     try {
@@ -2563,20 +2278,19 @@
   // 허용된 구글 계정으로 로그인한 뒤에만 동기화를 시작합니다 (접근 제한은 Firebase 규칙에서 처리).
   const loginGate = document.getElementById("loginGate");
   let deniedMsg = "";
-  let syncStarted = false;
   function showGate() {
     document.getElementById("loginMsg").textContent = deniedMsg || "로그인이 필요합니다";
     deniedMsg = "";
     loginGate.style.display = "flex";
   }
-  // 이미 등록된 스팩 종목의 수요3·수요5를 확인 후 삭제 (체크한 항목·첨부파일이 있는 일정은 건드리지 않음)
+  // 이미 등록된 스팩 종목의 수요3·수요5를 확인 후 삭제 (완료 처리한 일정은 건드리지 않음)
   let spacCleanupAsked = false;
   function offerSpacCleanup() {
-    if (spacCleanupAsked) return;
+    if (!canEdit() || spacCleanupAsked) return; // 수정은 소유자만
     spacCleanupAsked = true;
     const targets = state.tasks.filter((t) => t.type === "ipo" && isSpacName(t.stock)
       && (t.stage === "demand3" || t.stage === "demand5")
-      && !t.checklist.some((i) => i.done) && !(t.attachments || []).length);
+      && !t.done);
     if (!targets.length) return;
     const names = [...new Set(targets.map((t) => t.stock))];
     if (!confirm(`스팩 종목(${names.join(", ")})의 수요3·수요5 일정 ${targets.length}건을 삭제할까요?\n(스팩은 수요1만 진행합니다)`)) return;
@@ -2585,23 +2299,53 @@
     render();
     toast(`스팩 수요3·수요5 ${targets.length}건을 삭제했습니다`);
   }
-  function onRemote(snapshot) {
-    const data = snapshot.val();
+  // ---- 공모주(public)·내부(private) 두 위치를 실시간으로 받아 합치기 ----
+  let remotePub = null, remotePriv = null, remoteOwn = null, gotPub = false, gotPriv = false, gotOwn = false, listening = [];
+  function applyRemote() {
+    const needPriv = role !== "B", needOwn = role === "owner";
+    if (!gotPub || (needPriv && !gotPriv) || (needOwn && !gotOwn)) return; // 필요한 위치를 다 받은 뒤에만 화면 반영
     applyingRemote = true;
-    if (data) {
-      state = normalize(data);
-      selectedId = null;
-    }
+    state = normalize(mergeState(remotePub, needPriv ? remotePriv : null, needOwn ? remoteOwn : null, needOwn));
+    selectedId = null;
+    const first = !cloudSynced;
     cloudSynced = true; // 이 시점부터는 로컬 변경을 클라우드에 올려도 안전함
     render();
     applyingRemote = false;
-    if (!data) STATE_REF.set(state); // 클라우드가 정말 비어있을 때만, 동기화 완료 후 내 데이터를 최초 업로드
+    if (first && role === "owner") setTimeout(checkMigration, 300);
     else setTimeout(offerSpacCleanup, 400);
   }
-  function startSync() {
-    if (syncStarted) return;
-    syncStarted = true;
-    STATE_REF.on("value", onRemote, (err) => {
+  // 분리 전 데이터(ipoApp/state)가 있으면 1회만 공모주/내부로 나눠 옮김 (원본은 _backup에 복사)
+  async function checkMigration() {
+    try {
+      if (remotePub || remotePriv || remoteOwn) { readOnly = false; offerSpacCleanup(); return; }
+      const legacy = (await LEGACY_REF.once("value")).val();
+      if (!legacy) { readOnly = false; return; } // 정말 처음 쓰는 경우
+      const legacyState = normalize(legacy);
+      if (!confirm(`기존 일정 ${legacyState.tasks.length}건을 공모주/내부로 분리할까요?\n원본은 ipoApp/_backup에 복사해 둡니다.\n(분리 전에는 수정할 수 없습니다)`)) {
+        applyingRemote = true; state = legacyState; render(); applyingRemote = false;
+        toast("분리 전이라 보기만 가능합니다 - 새로고침하면 다시 묻습니다");
+        return;
+      }
+      const prefs = (await db.ref("ipoApp/viewerPrefs").once("value")).val();
+      const { pub, priv, own } = splitState(legacyState);
+      await db.ref("ipoApp").update({
+        "_backup": { state: legacy, viewerPrefs: prefs || null, at: Date.now() },
+        "public/state": pub,
+        "private/state": priv,
+        "ownerOnly/state": own,
+        "state": null,       // 옮긴 뒤 구버전 위치는 비움 (백업에 원본 있음)
+        "viewerPrefs": null  // 사람별 숨김 기능 삭제
+      });
+      lastSent = JSON.stringify([pub, priv, own]);
+      readOnly = false;
+      toast(`분리 완료: 공모주 ${pub.tasks.length}건 · 내부 ${priv.tasks.length}건`);
+    } catch (e) {
+      console.warn(e);
+      toast("데이터 분리 실패 - 새로고침 후 다시 시도해주세요");
+    }
+  }
+  function listen(ref, cb) {
+    const h = ref.on("value", (snap) => cb(snap.val()), (err) => {
       console.warn(err);
       if (err && err.code === "PERMISSION_DENIED") {
         deniedMsg = "이 계정은 접근 권한이 없습니다. 허용된 구글 계정으로 다시 로그인해주세요.";
@@ -2610,25 +2354,46 @@
         toast("동기화 연결 실패 - 인터넷 연결을 확인해주세요");
       }
     });
+    listening.push([ref, h]);
+  }
+  function startSync() {
+    listen(PUBLIC_REF, (v) => { remotePub = v; gotPub = true; applyRemote(); });
+    if (role !== "B") listen(PRIVATE_REF, (v) => { remotePriv = v; gotPriv = true; applyRemote(); });
+    if (role === "owner") listen(OWNER_REF, (v) => { remoteOwn = v; gotOwn = true; applyRemote(); });
   }
   function stopSync() {
-    STATE_REF.off("value");
-    syncStarted = false;
-    cloudSynced = false;
+    listening.forEach(([ref, h]) => ref.off("value", h));
+    listening = [];
+    remotePub = remotePriv = remoteOwn = null; gotPub = gotPriv = gotOwn = false;
+    cloudSynced = false; lastSent = "";
   }
-  let prefsRef = null;
-  auth.onAuthStateChanged((user) => {
-    if (prefsRef) { prefsRef.off("value"); prefsRef = null; }
-    hiddenStages = {};
-    readOnly = false;
-    if (user) {
-      loginGate.style.display = "none";
-      // 이 계정에 지정된 숨김 유형을 실시간으로 읽음 (값이 없으면 전부 보임)
-      prefsRef = db.ref(`ipoApp/viewerPrefs/${user.uid}/hidden`);
-      prefsRef.on("value", (snap) => { hiddenStages = snap.val() || {}; render(); }, (err) => console.warn(err));
-      startSync();
+  // 소유자: 이메일로 판단 / A그룹: groupA/{uid} = true / 그 외는 B그룹(allowedUsers)으로 시도 — 실제 차단은 Firebase 규칙
+  async function resolveRole(user) {
+    if (user.emailVerified && user.email === OWNER_EMAIL) return "owner";
+    const isA = await db.ref(`groupA/${user.uid}`).once("value").then((s) => s.val() === true).catch(() => false);
+    return isA ? "A" : "B";
+  }
+  auth.onAuthStateChanged(async (user) => {
+    stopSync();
+    role = null; currentUid = null; readOnly = true; hiddenStages = {};
+    document.body.classList.remove("viewer", "role-b");
+    if (!user) {
+      Store.clear(); // 로그아웃하면 이 기기의 캐시도 지움 (다음 사람에게 안 보이게)
+      state = { tasks: [], routines: [] }; selectedId = null;
+      render(); showGate();
+      return;
     }
-    else { stopSync(); showGate(); }
+    role = await resolveRole(user);
+    if (Store.cachedUid() !== user.uid) { state = { tasks: [], routines: [] }; selectedId = null; } // 다른 계정 캐시는 버림
+    currentUid = user.uid;
+    if (role !== "owner") document.body.classList.add("viewer");
+    if (role === "B") {
+      document.body.classList.add("role-b");
+      hiddenStages = { allocation: true, release: true, work: true, ir: true };
+    }
+    loginGate.style.display = "none";
+    render();
+    startSync();
   });
   document.addEventListener("click", (e) => {
     if (!e.target.closest("#loginBtn")) return;
