@@ -1,7 +1,11 @@
 <!--
   ipo-schedule-app.html
-  버전: v1.6.1 · 최종 수정: 2026-10-22
+  버전: v1.6.3 · 최종 수정: 2026-10-23
   변경 이력:
+    v1.6.3 (2026-10-23): 사이드바 "마감예정" 삭제(기존 데이터 포함) → "최근 수정" 기록으로 교체
+                          (등록·변경·삭제를 자동 기록, 5일 보관, 공모주 기록은 모두·내부 기록은 본인·A그룹만 봄,
+                          10분 안에 같은 일정을 다시 고치면 한 줄로 합침, 누르면 해당 일정으로 이동)
+    v1.6.2 (2026-10-23): 모바일 달력 태그 괄호 안쪽 빈칸 축소 — "[ 수1 ]" → "[수1]" (PC는 그대로)
     v1.6.1 (2026-10-22): 상세창에서 체크리스트·알림·첨부파일과 상단 "알림 N개" 칸 삭제(기존 데이터도 삭제),
                           완료 여부는 일정별 done 값 하나로 단순화하고 본인만 보이는 위치(ipoApp/ownerOnly)에 저장
                           — 달력 취소선은 본인 화면에만 표시, 사이드바 빠른 보기의 "첨부 정리 필요" 삭제
@@ -334,18 +338,23 @@
     .dp-day.today { border: 1px solid var(--green); font-weight: 900; }
     .dp-day.selected { background: var(--green); color: #fff; font-weight: 900; }
     .dp-day:hover { background: var(--soft); }
-    .routine-item {
-      border: 1px solid var(--line); border-radius: 8px; background: #fbfcfb; padding: 10px;
-      display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; margin-bottom: 8px;
+    /* 최근 수정 기록 */
+    .log-day { color: var(--muted); font-size: 11px; font-weight: 800; margin: 8px 0 3px; }
+    .log-day:first-child { margin-top: 0; }
+    .log-item {
+      display: grid; grid-template-columns: 14px 34px 1fr; gap: 4px; align-items: baseline; width: 100%;
+      border: 0; background: transparent; padding: 3px 2px; border-radius: 6px; text-align: left;
+      font: inherit; font-size: 12px; color: var(--ink); cursor: pointer;
     }
-    .routine-item strong { font-size: 13px; display: block; }
-    .routine-item.done strong { text-decoration: line-through; color: var(--muted); }
-    .routine-item .r-due.overdue { color: var(--red); font-weight: 700; }
-    .routine-check {
-      width: 20px; height: 20px; border: 1px solid var(--line); border-radius: 5px;
-      background: #fff; padding: 0; flex: none; cursor: pointer; display: grid; place-items: center; font-size: 13px;
-    }
-    .routine-check.checked { background: var(--green); border-color: var(--green); color: #fff; }
+    .log-item:hover { background: var(--soft); }
+    .log-item.gone { cursor: default; }
+    .log-item.gone:hover { background: transparent; }
+    .log-ico { font-weight: 900; text-align: center; color: var(--muted); }
+    .log-time { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+    .log-txt { min-width: 0; overflow-wrap: anywhere; }
+    .log-txt b { font-weight: 850; }
+    .log-txt .log-tag { font-weight: 850; }
+    .log-more { margin-top: 4px; width: 100%; }
     .icon-x {
       width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 7px;
       background: #fff; color: var(--muted); padding: 0; line-height: 1; font-size: 15px; flex: none;
@@ -470,9 +479,8 @@
     /* ---------- 보기 전용 계정(A·B그룹): 등록·수정·삭제 버튼 숨김 ---------- */
     body.viewer #openSchedule, body.viewer #backupSection, body.viewer #dayListAdd,
     body.viewer .detail-foot, body.viewer #editTitleBtn, body.viewer .add-group-btn,
-    body.viewer #detailBody .btn, body.viewer .routine-item .icon-x { display: none !important; }
-    body.viewer .routine-check, body.viewer #detailDateBox { pointer-events: none; }
-    body.role-b #routineSection { display: none !important; }
+    body.viewer #detailBody .btn { display: none !important; }
+    body.viewer #detailDateBox { pointer-events: none; }
 
     @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 
@@ -489,6 +497,8 @@
         display: block; white-space: nowrap; text-overflow: clip; /* 한 줄로 표시 */
       }
       .evg { font-size: 10px; line-height: 1.1; letter-spacing: -.3px; padding: 0 2px; font-weight: 800; }
+      /* 모바일: 태그 고정폭(3em)을 풀어 괄호를 글자에 붙임 — 태그 글자가 모두 전각 2글자라 괄호 위치는 그대로 맞음 */
+      .evg-tg { width: auto; }
     }
 
     /* ---------- 넓은 화면 ---------- */
@@ -550,7 +560,7 @@
       <div class="mark">IPO</div>
       <div>
         <h2>업무일정</h2>
-        <div class="muted">이 기기에 저장됩니다 · v1.6.1 (2026-10-22)</div>
+        <div class="muted">이 기기에 저장됩니다 · v1.6.3 (2026-10-23)</div>
       </div>
     </div>
     <div class="drawer-body">
@@ -563,9 +573,9 @@
         <div class="tree" id="filters"></div>
       </section>
 
-      <section id="routineSection">
-        <div class="group-title">마감예정</div>
-        <div id="routineList"></div>
+      <section id="logSection">
+        <div class="group-title">최근 수정 <span class="muted" style="font-weight:400">(5일)</span></div>
+        <div id="logList"></div>
       </section>
 
       <section id="backupSection">
@@ -672,9 +682,6 @@
         <button class="btn" id="chooseIr" style="text-align:left; padding:12px 14px">
           IR 등록<br><span class="muted" style="font-weight:400">날짜 하나짜리 IR 일정을 만듭니다</span>
         </button>
-        <button class="btn" id="chooseRoutine" style="text-align:left; padding:12px 14px">
-          마감예정 업무 등록<br><span class="muted" style="font-weight:400">달력에는 안 보이는, 마감일이 있는 업무(반복 또는 1회성)를 만듭니다</span>
-        </button>
       </div>
       <div class="modal-actions" style="grid-template-columns:1fr">
         <button class="btn" type="button" data-close="scheduleTypeDialog">취소</button>
@@ -714,24 +721,6 @@
       <div class="modal-actions">
         <button class="btn" type="button" data-close="ipoDialog">취소</button>
         <button class="btn primary" type="button" data-submit="ipoForm">등록</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 반복 알림 -->
-  <div class="sheet" id="routineDialog">
-    <div class="modal" id="routineForm">
-      <h2>마감예정 업무 등록</h2>
-      <div class="form-grid">
-        <label>업무명<input id="routineTitle" required placeholder="예: 매일 일지 작성"></label>
-        <label>반복<select id="routineFreq"><option>없음</option><option>일별</option><option>주별</option><option>월별</option></select></label>
-        <label>마감일<input id="routineDue" type="date" required></label>
-        <label>알림 <span class="muted" style="font-weight:400">(선택)</span><input id="routineReminder" placeholder="예: 평일 오후 5시"></label>
-      </div>
-      <div class="hint">"반복"을 선택하면 완료 체크 시 다음 마감일로 자동 이동합니다. "없음"은 1회성 마감으로, 완료 체크 후 직접 삭제(×)해야 목록에서 사라집니다. 마감일이 지나도 완료 체크 전까지는 목록에 그대로 남습니다.</div>
-      <div class="modal-actions">
-        <button class="btn" type="button" data-close="routineDialog">취소</button>
-        <button class="btn primary" type="button" data-submit="routineForm">등록</button>
       </div>
     </div>
   </div>
@@ -799,7 +788,7 @@
   <div class="sheet" id="importDialog">
     <div class="modal" id="importForm">
       <h2>데이터 가져오기</h2>
-      <label>내보낸 데이터 붙여넣기<textarea id="importText" rows="9" required placeholder='{"tasks": [...], "routines": [...]}'></textarea></label>
+      <label>내보낸 데이터 붙여넣기<textarea id="importText" rows="9" required placeholder='{"tasks": [...]}'></textarea></label>
       <div class="hint">지금 이 기기의 데이터는 가져온 데이터로 바뀝니다.</div>
       <div class="modal-actions">
         <button class="btn" type="button" data-close="importDialog">취소</button>
@@ -867,7 +856,12 @@
       if (isDone) done[t.id] = true;
       (isPublicTask(t) ? pubTasks : privTasks).push(base);
     });
-    return { pub: { tasks: pubTasks }, priv: { tasks: privTasks, routines: s.routines }, own: { done } };
+    const log = pruneLog(s.log);
+    return {
+      pub: { tasks: pubTasks, log: log.filter((e) => e.pub) },
+      priv: { tasks: privTasks, log: log.filter((e) => !e.pub) },
+      own: { done }
+    };
   }
   // 화면용으로 합치기 (A·B그룹은 취소선 없음, B그룹은 priv도 없음)
   function mergeState(pub, priv, own, isOwner) {
@@ -878,8 +872,79 @@
       else if (own) m.done = !!(own.done && own.done[t.id]);
       return m;
     });
-    return { tasks, routines: toArr(priv && priv.routines) };
+    const log = [...toArr(pub && pub.log), ...toArr(priv && priv.log)];
+    return { tasks, log };
   }
+
+  /* ---------- 최근 수정 기록 (v1.6.3) ---------- */
+  const LOG_KEEP_MS = 5 * 86400000;  // 5일 보관
+  const LOG_MERGE_MS = 10 * 60000;   // 10분 안에 같은 일정을 다시 고치면 한 줄로 합침
+  function pruneLog(log) {
+    const cut = Date.now() - LOG_KEEP_MS;
+    return (log || []).filter((e) => e && e.at >= cut);
+  }
+  let prevSnap = null; // 직전 일정 상태 {id: "종목|증권사|유형|날짜"} — 비교용
+  function snapOf(tasks) {
+    const m = new Map();
+    tasks.forEach((t) => m.set(t.id, { stock: t.stock, broker: t.broker || "", stage: t.stage, date: t.date || "", type: t.type, pub: isPublicTask(t) }));
+    return m;
+  }
+  function shortDate(d) {
+    if (!d) return "미정";
+    const [, m, dd] = d.split("-").map(Number);
+    return `${m}/${dd}`;
+  }
+  // 직전 상태와 지금 상태를 비교해 기록 추가 (소유자만 호출)
+  function recordChanges(tasks) {
+    const now = snapOf(tasks);
+    if (!prevSnap) { prevSnap = now; return; }
+    const before = prevSnap; prevSnap = now;
+    const out = [];
+    const at = Date.now();
+    // 등록·삭제: 같은 종목이 한 번에 여러 건이면 한 줄로 ("종목 등록 (6건)")
+    const groupAddDel = (act, ids, src) => {
+      const byStock = new Map();
+      ids.forEach((id) => {
+        const t = src.get(id);
+        const k = t.stock + "|" + t.type;
+        if (!byStock.has(k)) byStock.set(k, []);
+        byStock.get(k).push([id, t]);
+      });
+      byStock.forEach((list) => {
+        const pubs = list.filter(([, t]) => t.pub);
+        const use = pubs.length ? pubs : list; // 공모주 일정이 섞여 있으면 공모주 기준으로 한 줄(모두에게 보임)
+        const [id, t] = use[0];
+        out.push({ id: uid("log"), at, act, tid: id, stock: t.stock, stage: list.length > 1 ? "" : t.stage, n: list.length, pub: !!pubs.length });
+      });
+    };
+    groupAddDel("add", [...now.keys()].filter((id) => !before.has(id)), now);
+    groupAddDel("del", [...before.keys()].filter((id) => !now.has(id)), before);
+    // 변경: 날짜는 일정마다, 종목명·증권사 변경은 종목 단위로 한 줄
+    const renameSeen = new Set();
+    now.forEach((t, id) => {
+      const o = before.get(id);
+      if (!o) return;
+      if (o.date !== t.date) {
+        const last = log0().find((e) => e.act === "edit" && e.field === "date" && e.tid === id);
+        if (last && at - last.at < LOG_MERGE_MS) { // 10분 안에 다시 옮겼으면 기존 줄의 '바뀐 값'만 갱신
+          last.to = t.date; last.at = at;
+          if (last.to === last.from) state.log = state.log.filter((e) => e !== last);
+        } else {
+          out.push({ id: uid("log"), at, act: "edit", field: "date", tid: id, stock: t.stock, stage: t.stage, from: o.date, to: t.date, pub: t.pub });
+        }
+      }
+      ["stock", "broker"].forEach((f) => {
+        if (o[f] === t[f]) return;
+        const key = `${f}|${o.stock}|${o[f]}|${t[f]}`;
+        if (renameSeen.has(key)) return;
+        renameSeen.add(key);
+        out.push({ id: uid("log"), at, act: "edit", field: f, tid: id, stock: t.stock, stage: "", from: o[f], to: t[f], pub: t.pub });
+      });
+    });
+    if (out.length) state.log = [...out, ...(state.log || [])];
+    state.log = pruneLog(state.log);
+  }
+  function log0() { return state.log || []; }
 
   // 내가 방금 올린 변경이 리스너로 되돌아와서 다시 저장을 트리거하는 걸 막는 플래그
   let applyingRemote = false;
@@ -913,6 +978,7 @@
       if (applyingRemote) return true; // 방금 받은 원격 변경은 다시 올리지 않음
       if (!cloudSynced) return true;   // 클라우드 초기값을 받기 전에는 올리지 않음 (덮어쓰기 방지)
       if (!canEdit()) return true;     // 보기 전용 계정은 저장 안 함
+      recordChanges(state.tasks);      // 직전 상태와 비교해 '최근 수정' 기록 추가
       const { pub, priv, own } = splitState(state);
       const json = JSON.stringify([pub, priv, own]);
       if (json === lastSent) return true; // 필터·월 이동 등 데이터 변화 없는 렌더는 건너뜀
@@ -1059,12 +1125,6 @@
   }
   function addDays(s, n) { const d = new Date(`${s}T00:00:00`); d.setDate(d.getDate() + n); return iso(d); }
   function addMonths(s, n) { const d = new Date(`${s}T00:00:00`); d.setMonth(d.getMonth() + n); return iso(d); }
-  function nextRoutineDue(dateIso, freq) {
-    if (freq === "일별") return addDays(dateIso, 1);
-    if (freq === "주별") return addDays(dateIso, 7);
-    if (freq === "월별") return addMonths(dateIso, 1);
-    return dateIso; // 없음(1회성)은 마감일을 바꾸지 않음
-  }
   // 영업일 계산: holidays는 파일 아래쪽에서 정의되지만, 이 함수들은 실제 호출 시점(다이얼로그 조작)에만
   // 실행되므로 스크립트 전체 로드가 끝난 뒤라 문제 없이 참조됩니다.
   function isBizDay(dIso) {
@@ -1137,7 +1197,7 @@
   function loadState() {
     const saved = Store.load();
     if (saved && Array.isArray(saved.tasks)) return normalize(saved);
-    return { tasks: [], routines: [] }; // 예시 일정은 넣지 않음 (보기 계정에 잠깐 보이는 문제 방지)
+    return { tasks: [], log: [] }; // 예시 일정은 넣지 않음 (보기 계정에 잠깐 보이는 문제 방지)
   }
   function normalize(data) {
     return {
@@ -1154,11 +1214,11 @@
             : (Array.isArray(t.checklist) && t.checklist.length > 0 && t.checklist.every((i) => i && i.done))
         };
       }),
-      routines: (data.routines || []).map((r) => ({
-        id: r.id || uid("routine"), title: r.title || "(이름 없음)",
-        freq: r.freq || "없음", dueDate: r.dueDate || iso(today),
-        reminder: r.reminder || "", done: !!r.done
-      }))
+      log: pruneLog(toArr(data.log)).map((e) => ({
+        id: e.id || uid("log"), at: Number(e.at) || 0, act: e.act, field: e.field || "", tid: e.tid || "",
+        stock: e.stock || "", stage: e.stage || "", n: Number(e.n) || 1,
+        from: e.from == null ? "" : e.from, to: e.to == null ? "" : e.to, pub: !!e.pub
+      })).sort((x, y) => y.at - x.at)
     };
   }
   function save() { Store.save(state); }
@@ -1194,7 +1254,7 @@
   function render() {
     renderFilters();
     renderCategoryTree();
-    renderRoutines();
+    renderLog();
     renderCalendar();
     renderGantt();
     renderDetail();
@@ -1394,50 +1454,48 @@
     });
   }
 
-  function renderRoutines() {
-    const list = document.getElementById("routineList");
-    const todayIso = iso(today);
-    const sorted = [...state.routines].sort((a, b) => {
-      if (!!a.done !== !!b.done) return a.done ? 1 : -1; // 완료 항목은 아래로
-      return (a.dueDate || "").localeCompare(b.dueDate || "");
-    });
-    list.innerHTML = sorted.map((r) => {
-      const diff = Math.round((new Date(`${r.dueDate}T00:00:00`) - new Date(`${todayIso}T00:00:00`)) / 86400000);
-      const overdue = !r.done && diff < 0;
-      const dday = r.done ? "완료" : diff === 0 ? "D-day" : diff > 0 ? `D-${diff}` : `D+${-diff} 지남`;
-      const freqLabel = r.freq === "없음" ? "1회성" : r.freq;
-      return `
-      <div class="routine-item${r.done ? " done" : ""}">
-        <button class="routine-check${r.done ? " checked" : ""}" data-routine-check="${r.id}" aria-label="완료 체크">${r.done ? "✓" : ""}</button>
-        <div><strong>${esc(r.title)}</strong><div class="muted r-due${overdue ? " overdue" : ""}">${freqLabel} · ${r.dueDate}${r.reminder ? " · " + esc(r.reminder) : ""} · ${dday}</div></div>
-        <button class="icon-x" data-routine="${r.id}" aria-label="삭제">×</button>
-      </div>`;
-    }).join("") || `<div class="muted">등록된 마감예정 업무가 없습니다.</div>`;
-    list.querySelectorAll("[data-routine]").forEach((b) => {
-      b.addEventListener("click", () => {
-        const r = state.routines.find((x) => x.id === b.dataset.routine);
-        if (!confirm(`"${r.title}"을(를) 삭제할까요?`)) return;
-        state.routines = state.routines.filter((x) => x.id !== b.dataset.routine);
-        render();
-        toast("삭제했습니다");
-      });
-    });
-    list.querySelectorAll("[data-routine-check]").forEach((b) => {
-      b.addEventListener("click", () => {
-        const r = state.routines.find((x) => x.id === b.dataset.routineCheck);
-        if (!r) return;
-        if (r.freq === "없음") {
-          r.done = !r.done;
-        } else if (!r.done) {
-          const next = nextRoutineDue(r.dueDate, r.freq);
-          r.dueDate = next;
-          r.done = false;
-          toast(`완료 처리했습니다. 다음 마감일: ${next}`);
-        }
-        render();
-      });
-    });
+  let logShowAll = false;
+  function renderLog() {
+    const list = document.getElementById("logList");
+    const items = pruneLog(state.log).filter((e) => !hiddenStages[e.stage]);
+    if (!items.length) { list.innerHTML = `<div class="muted">최근 5일 동안 바뀐 일정이 없습니다.</div>`; return; }
+    const shown = logShowAll ? items : items.slice(0, 10);
+    const todayIso = iso(today), yIso = addDays(iso(today), -1);
+    let lastDay = "";
+    const html = shown.map((e) => {
+      const d = new Date(e.at);
+      const dIso = iso(d);
+      const head = dIso === lastDay ? "" : `<div class="log-day">${dIso === todayIso ? "오늘" : dIso === yIso ? "어제" : `${d.getMonth() + 1}월 ${d.getDate()}일`}</div>`;
+      lastDay = dIso;
+      const ico = e.act === "add" ? "＋" : e.act === "del" ? "✕" : "✎";
+      const tag = e.stage ? ` <span class="log-tag" style="color:${stageColor[e.stage]}">[${stageLabel[e.stage]}]</span>` : "";
+      let what;
+      if (e.act === "add") what = e.n > 1 ? `종목 등록 (${e.n}건)` : "등록";
+      else if (e.act === "del") what = e.n > 1 ? `전체 삭제 (${e.n}건)` : "삭제";
+      else if (e.field === "date") what = `${shortDate(e.from)} → ${shortDate(e.to)}`;
+      else what = `${e.field === "stock" ? "종목명" : "증권사"} ${esc(e.from || "없음")} → ${esc(e.to || "없음")}`;
+      const exists = e.act !== "del" && state.tasks.some((t) => t.id === e.tid);
+      return `${head}<button type="button" class="log-item${exists ? "" : " gone"}" data-log-tid="${exists ? e.tid : ""}">
+        <span class="log-ico">${ico}</span><span class="log-time">${pad2(d.getHours())}:${pad2(d.getMinutes())}</span>
+        <span class="log-txt"><b>${esc(e.stock)}</b>${tag} ${what}</span></button>`;
+    }).join("");
+    const more = items.length > 10 ? `<button type="button" class="btn sm log-more" id="logMoreBtn">${logShowAll ? "접기" : `더 보기 (${items.length - 10})`}</button>` : "";
+    list.innerHTML = html + more;
   }
+  function pad2(n) { return String(n).padStart(2, "0"); }
+  // 기록을 누르면 그 일정이 있는 달로 이동하고 상세창을 엶 (이벤트 위임)
+  document.getElementById("logList").addEventListener("click", (e) => {
+    if (e.target.closest("#logMoreBtn")) { logShowAll = !logShowAll; renderLog(); return; }
+    const b = e.target.closest("[data-log-tid]");
+    if (!b || !b.dataset.logTid) return;
+    const t = state.tasks.find((x) => x.id === b.dataset.logTid);
+    if (!t) return;
+    selectedId = t.id;
+    if (t.date) { viewDate = new Date(`${t.date}T00:00:00`); viewDate.setDate(1); }
+    closeDrawerOnMobile();
+    render();
+    openDetail();
+  });
 
   // 대한민국 공휴일 (2026~2027, 인사혁신처 고시 · 우주항공청 월력요항 기준)
   const holidays = {
@@ -2222,29 +2280,6 @@
     toast(`${title} IR 일정을 등록했습니다`);
   });
 
-  document.getElementById("chooseRoutine").addEventListener("click", () => {
-    closeDialog("scheduleTypeDialog");
-    document.getElementById("routineTitle").value = "";
-    document.getElementById("routineReminder").value = "";
-    document.getElementById("routineDue").value = quickAddDate || iso(today);
-    quickAddDate = null;
-    openDialog("routineDialog", "routineTitle");
-  });
-  onSubmit("routineForm", () => {
-    const due = document.getElementById("routineDue").value;
-    if (!due) return;
-    state.routines.push({
-      id: uid("routine"),
-      title: document.getElementById("routineTitle").value.trim(),
-      freq: document.getElementById("routineFreq").value,
-      dueDate: due,
-      reminder: document.getElementById("routineReminder").value.trim(),
-      done: false
-    });
-    closeDialog("routineDialog"); render();
-    toast("마감예정 업무를 등록했습니다");
-  });
-
   document.getElementById("exportBtn").addEventListener("click", async () => {
     const text = JSON.stringify(state, null, 2);
     try {
@@ -2306,6 +2341,7 @@
     if (!gotPub || (needPriv && !gotPriv) || (needOwn && !gotOwn)) return; // 필요한 위치를 다 받은 뒤에만 화면 반영
     applyingRemote = true;
     state = normalize(mergeState(remotePub, needPriv ? remotePriv : null, needOwn ? remoteOwn : null, needOwn));
+    prevSnap = snapOf(state.tasks); // 받은 데이터는 기록하지 않고, 이후 내 변경만 비교
     selectedId = null;
     const first = !cloudSynced;
     cloudSynced = true; // 이 시점부터는 로컬 변경을 클라우드에 올려도 안전함
@@ -2320,7 +2356,7 @@
       if (remotePub || remotePriv || remoteOwn) { readOnly = false; offerSpacCleanup(); return; }
       const legacy = (await LEGACY_REF.once("value")).val();
       if (!legacy) { readOnly = false; return; } // 정말 처음 쓰는 경우
-      const legacyState = normalize(legacy);
+      const legacyState = normalize({ ...legacy, log: [] });
       if (!confirm(`기존 일정 ${legacyState.tasks.length}건을 공모주/내부로 분리할까요?\n원본은 ipoApp/_backup에 복사해 둡니다.\n(분리 전에는 수정할 수 없습니다)`)) {
         applyingRemote = true; state = legacyState; render(); applyingRemote = false;
         toast("분리 전이라 보기만 가능합니다 - 새로고침하면 다시 묻습니다");
@@ -2365,7 +2401,7 @@
     listening.forEach(([ref, h]) => ref.off("value", h));
     listening = [];
     remotePub = remotePriv = remoteOwn = null; gotPub = gotPriv = gotOwn = false;
-    cloudSynced = false; lastSent = "";
+    cloudSynced = false; lastSent = ""; prevSnap = null;
   }
   // 소유자: 이메일로 판단 / A그룹: groupA/{uid} = true / 그 외는 B그룹(allowedUsers)으로 시도 — 실제 차단은 Firebase 규칙
   async function resolveRole(user) {
@@ -2379,12 +2415,12 @@
     document.body.classList.remove("viewer", "role-b");
     if (!user) {
       Store.clear(); // 로그아웃하면 이 기기의 캐시도 지움 (다음 사람에게 안 보이게)
-      state = { tasks: [], routines: [] }; selectedId = null;
+      state = { tasks: [], log: [] }; selectedId = null;
       render(); showGate();
       return;
     }
     role = await resolveRole(user);
-    if (Store.cachedUid() !== user.uid) { state = { tasks: [], routines: [] }; selectedId = null; } // 다른 계정 캐시는 버림
+    if (Store.cachedUid() !== user.uid) { state = { tasks: [], log: [] }; selectedId = null; } // 다른 계정 캐시는 버림
     currentUid = user.uid;
     if (role !== "owner") document.body.classList.add("viewer");
     if (role === "B") {
