@@ -1,7 +1,10 @@
 <!--
   ipo-schedule-app.html
-  버전: v1.6.6 · 최종 수정: 2026-11-05
+  버전: v1.6.9 · 최종 수정: 2026-11-05
   변경 이력:
+    v1.6.9 (2026-11-05): 일정 보기 전용으로 방향 변경 — 완료 취소선, 상세창 "업무 완료" 버튼, 빠른 보기 "완료" 필터 삭제 (예전 완료 값은 데이터에 그대로 둠)
+    v1.6.8 (2026-11-05): PC에서 달력의 종목 이름에 마우스를 올리면 밑줄 표시 (모바일·터치는 그대로)
+    v1.6.7 (2026-11-05): 상세창 날짜 옆 시간 표시와 날짜 변경 창의 "마감/기준 시각" 칸 삭제 — 날짜만 고르면 됨 (저장된 시간 값은 그대로 둠)
     v1.6.6 (2026-11-05): 관리자 전용 "B그룹으로 보기" 토글(사이드바 맨 위) — 켜면 B그룹 화면과 같게(공모주 일정만, 최근 수정은 공모주 기록만, 상세창 버튼·취소선 없음, 수정 불가), 끄면 원래대로. 실제 권한·데이터는 바뀌지 않고 보는 동안 저장하지 않음
     v1.6.5 (2026-11-05): [버그 수정] 저장 직후나 다른 기기에서 바뀐 내용이 들어올 때 선택한 일정이 풀려, 열린 상세창의 날짜·확정공모가·✎·날짜 변경 버튼이 안 눌리던 문제 수정 (선택 유지, 삭제된 일정이면 상세창 닫음)
     v1.6.4 (2026-11-05): 종목 확정공모가 추가 — 상세창 날짜 아래 확정공모가 칸을 누르거나 종목 등록·종목 정보 수정(✎)에서 입력, 최근 수정 기록에 반영
@@ -251,8 +254,11 @@
     .evg-tg { display: inline-flex; justify-content: space-between; width: 3em; vertical-align: baseline; }
     .evg-tg i { font-style: normal; }
     @media (min-width: 900px) { .evg-tag::after { content: " "; white-space: pre; } } /* PC만 대괄호 뒤 한 칸 */
-    .event.done { opacity: .6; text-decoration: line-through; }
     .event.dragging { opacity: .3; }
+    /* v1.6.8: PC(마우스)에서 종목 이름에 올리면 밑줄 — 터치 기기에는 적용 안 함 */
+    @media (hover: hover) and (pointer: fine) {
+      .event:hover { text-decoration: underline; text-underline-offset: 2px; }
+    }
     .event.drag-armed { transform: scale(1.04); box-shadow: 0 4px 12px rgba(0,0,0,.22); background: var(--panel); position: relative; z-index: 2; }
     .evg.st-demand1, .evg.st-demand3, .evg.st-demand5, .event.st-demand1, .event.st-demand3, .event.st-demand5 { border-left-color: #3b7dc9; color: #3b7dc9; }
     .evg.st-allocation, .event.st-allocation { border-left-color: #d9a441; color: #9c6b13; }
@@ -417,8 +423,6 @@
       width: 21px; height: 21px; border: 2px solid var(--line); border-radius: 6px;
       display: grid; place-items: center; color: #fff; font-size: 12px; font-weight: 900;
     }
-    .task.done .check { background: var(--green); border-color: var(--green); }
-    .task.done strong { color: var(--muted); text-decoration: line-through; }
     .task strong { display: block; font-size: 13px; margin-bottom: 2px; }
     .task small { color: var(--muted); font-size: 12px; }
     .attach { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; border: 1px solid var(--line); border-radius: 8px; padding: 9px; background: #fbfcfb; }
@@ -428,7 +432,7 @@
     .detail-foot {
       border-top: 1px solid var(--line); background: #fbfcfb;
       padding: 11px 16px calc(11px + env(safe-area-inset-bottom));
-      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+      display: grid; grid-template-columns: 1fr; gap: 8px;
     }
 
     /* ---------- 입력 시트 ---------- */
@@ -572,7 +576,7 @@
       <div class="mark">IPO</div>
       <div>
         <h2>업무일정</h2>
-        <div class="muted">이 기기에 저장됩니다 · v1.6.6 (2026-11-05)</div>
+        <div class="muted">이 기기에 저장됩니다 · v1.6.9 (2026-11-05)</div>
         <label class="chk-inline" id="previewBWrap"><input type="checkbox" id="previewBChk"> B그룹으로 보기</label>
       </div>
     </div>
@@ -623,7 +627,6 @@
     <div class="detail-body" id="detailBody"></div>
     <div class="detail-foot">
       <button class="btn" id="editDateBtn">날짜 변경</button>
-      <button class="btn primary" id="completeBtn">업무 완료</button>
     </div>
   </section>
 
@@ -777,11 +780,9 @@
   <div class="sheet" id="dateDialog">
     <div class="modal" id="dateForm">
       <h2>날짜 변경</h2>
-      <div class="form-grid">
+      <div class="form-grid" style="grid-template-columns:1fr">
         <label>변경할 날짜<input id="newDate" type="text" readonly required placeholder="날짜 선택"></label>
-        <label>마감/기준 시각<input id="newTime" type="time" required></label>
       </div>
-      <div class="hint">마감/기준 시각을 함께 정할 수 있습니다.</div>
       <div class="modal-actions">
         <button class="btn" type="button" data-close="dateDialog">취소</button>
         <button class="btn primary" type="button" data-submit="dateForm">변경</button>
@@ -1252,7 +1253,9 @@
     if (!p) return "";
     return String(p).split("~").map((n) => Number(n).toLocaleString("ko-KR")).join("~") + "원";
   }
-  function taskDone(t) { return !previewB && !!t.done; } // B그룹으로 보기: 완료 취소선 없음 (B그룹과 같게)
+  // v1.6.9: 일정 보기 전용으로 방향 변경 — 완료 표시(취소선)·업무 완료 버튼·완료 필터 삭제.
+  // 예전에 저장된 완료 값(ownerOnly/state/done)은 지우지 않고 그대로 둠 (화면에서만 안 씀)
+  function taskDone() { return false; }
   function selectedTask() { return state.tasks.find((t) => t.id === selectedId) || null; }
 
   /* ---------- 필터 ---------- */
@@ -1260,8 +1263,7 @@
   function filterDefs() {
     const c = (fn) => state.tasks.filter((t) => !hiddenStages[t.stage]).filter(fn).length;
     return [
-      ["all", "전체", c(() => true)],
-      ["done", "완료", c(taskDone)]
+      ["all", "전체", c(() => true)]
     ];
   }
   function filterName(id) {
@@ -1273,10 +1275,6 @@
     return state.tasks
       .filter((t) => !hiddenStages[t.stage])
       .filter((t) => visibleStages[t.stage] !== false)
-      .filter((t) => {
-        if (filter === "done") return taskDone(t);
-        return true;
-      })
       .filter((t) => !q || `${t.stock} ${t.broker || ""} ${stageLabel[t.stage]}`.includes(q));
   }
 
@@ -1756,11 +1754,10 @@
     tag.style.background = stageColor[task.stage] + "1f";
     tag.style.color = stageColor[task.stage];
     document.getElementById("detailTitle").textContent = task.stock + (task.broker ? `(${task.broker})` : "");
-    document.getElementById("detailDate").textContent = `${prettyDate(task.date)} ${task.time || ""}`;
+    document.getElementById("detailDate").textContent = prettyDate(task.date); // v1.6.7: 시간 표시 안 함
     const isIpo = task.type === "ipo";
     document.getElementById("detailPriceBox").style.display = isIpo ? "" : "none";
     document.getElementById("detailPrice").textContent = fmtPrice(task.price) || (viewRole() === "owner" ? "미정 · 눌러서 입력" : "미정");
-    document.getElementById("completeBtn").textContent = taskDone(task) ? "완료 해제" : "업무 완료";
     if (viewRole() !== "owner") { body.innerHTML = ""; return; } // 보기 계정은 버튼 영역 없음 (상세 항목은 나중에 추가 예정)
 
     body.innerHTML = `
@@ -2120,7 +2117,6 @@
   function openDateDialog() {
     const t = selectedTask(); if (!t || !canEdit()) return;
     document.getElementById("newDate").value = t.date;
-    document.getElementById("newTime").value = t.time || stageDefaultTime[t.stage] || "09:00";
     openDialog("dateDialog");
   }
   document.getElementById("editDateBtn").addEventListener("click", openDateDialog);
@@ -2159,20 +2155,11 @@
   onSubmit("dateForm", () => {
     const t = selectedTask();
     const v = document.getElementById("newDate").value;
-    const tm = document.getElementById("newTime").value;
-    if (!t || !v || !tm) return;
-    t.date = v; t.time = tm;
+    if (!t || !v) return;
+    t.date = v; // v1.6.7: 시간은 화면에서 쓰지 않음 (저장된 time 값은 그대로 둠)
     viewDate = new Date(`${v}T00:00:00`); viewDate.setDate(1);
     closeDialog("dateDialog"); render();
-    toast(`${prettyDate(v)} ${tm}로 변경했습니다`);
-  });
-
-  document.getElementById("completeBtn").addEventListener("click", () => {
-    const t = selectedTask(); if (!t) return;
-    const next = !taskDone(t);
-    t.done = next;
-    render();
-    toast(next ? "완료 처리했습니다" : "완료를 해제했습니다");
+    toast(`${prettyDate(v)}로 변경했습니다`);
   });
 
   document.getElementById("dayListAdd").addEventListener("click", () => {
