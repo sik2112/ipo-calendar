@@ -1,7 +1,8 @@
 <!--
   ipo-schedule-app.html
-  버전: v1.6.5 · 최종 수정: 2026-11-05
+  버전: v1.6.6 · 최종 수정: 2026-11-05
   변경 이력:
+    v1.6.6 (2026-11-05): 관리자 전용 "B그룹으로 보기" 토글(사이드바 맨 위) — 켜면 B그룹 화면과 같게(공모주 일정만, 최근 수정은 공모주 기록만, 상세창 버튼·취소선 없음, 수정 불가), 끄면 원래대로. 실제 권한·데이터는 바뀌지 않고 보는 동안 저장하지 않음
     v1.6.5 (2026-11-05): [버그 수정] 저장 직후나 다른 기기에서 바뀐 내용이 들어올 때 선택한 일정이 풀려, 열린 상세창의 날짜·확정공모가·✎·날짜 변경 버튼이 안 눌리던 문제 수정 (선택 유지, 삭제된 일정이면 상세창 닫음)
     v1.6.4 (2026-11-05): 종목 확정공모가 추가 — 상세창 날짜 아래 확정공모가 칸을 누르거나 종목 등록·종목 정보 수정(✎)에서 입력, 최근 수정 기록에 반영
     v1.6.3 (2026-10-23): 사이드바 "마감예정" 삭제(기존 데이터 포함) → "최근 수정" 기록으로 교체
@@ -484,6 +485,14 @@
     body.viewer #detailBody .btn { display: none !important; }
     body.viewer #detailDateBox { pointer-events: none; }
     body.viewer #detailPriceBox { pointer-events: none; }
+    /* v1.6.6: 관리자 전용 "B그룹으로 보기" — 켜져 있으면 화면 아래쪽에 표시 (알림은 그 위로) */
+    #previewBWrap { display: none; margin-top: 8px; }
+    #previewBar { display: none; position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 95;
+      align-items: center; gap: 10px; background: #5b6b73; color: #fff; border-radius: 999px; padding: 6px 8px 6px 14px;
+      font-size: 13px; font-weight: 800; box-shadow: var(--shadow); white-space: nowrap; }
+    #previewBar button { border: 0; border-radius: 999px; background: #fff; color: #5b6b73; font: inherit; padding: 3px 10px; cursor: pointer; }
+    body.preview-b #previewBar { display: flex; }
+    body.preview-b .toast { bottom: 64px; }
 
     @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 
@@ -563,7 +572,8 @@
       <div class="mark">IPO</div>
       <div>
         <h2>업무일정</h2>
-        <div class="muted">이 기기에 저장됩니다 · v1.6.5 (2026-11-05)</div>
+        <div class="muted">이 기기에 저장됩니다 · v1.6.6 (2026-11-05)</div>
+        <label class="chk-inline" id="previewBWrap"><input type="checkbox" id="previewBChk"> B그룹으로 보기</label>
       </div>
     </div>
     <div class="drawer-body">
@@ -804,6 +814,7 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div id="previewBar">B그룹으로 보는 중 · 수정 불가 <button type="button" id="previewBOff">끄기</button></div>
 
   <!-- 로그인 화면: 허용된 구글 계정으로 로그인해야 앱이 열림 -->
   <div id="loginGate" style="display:none">
@@ -961,7 +972,10 @@
   let role = null;     // "owner" | "A" | "B"
   let currentUid = null;
   let lastSent = "";   // 마지막으로 올린 내용 — 같으면 다시 안 올림
-  function canEdit() { return role === "owner" && !readOnly; }
+  // v1.6.6: 관리자가 "B그룹으로 보기"를 켜면 화면만 B그룹처럼 (실제 권한·데이터·저장은 그대로, 보는 동안 저장 안 함)
+  let previewB = false;
+  function viewRole() { return previewB ? "B" : role; }
+  function canEdit() { return role === "owner" && !readOnly && !previewB; }
 
   const Store = {
     KEY: "ipoScheduleApp.v3",
@@ -1050,6 +1064,7 @@
   let visibleStages = { demand1: true, demand3: true, demand5: true, allocation: true, subscription: true, payment: true, listing: true, release: true, work: true, ir: true };
   // B그룹에서 아예 빠지는 유형 (로그인 시 그룹에 따라 정해짐 — 사람별 숨김 기능은 v1.6.0에서 삭제)
   let hiddenStages = {};
+  const B_HIDDEN_STAGES = { allocation: true, release: true, work: true, ir: true };
   // 숨김 유형을 뺀 사이드바 그룹 (하위 항목이 다 숨겨진 그룹은 통째로 제외)
   function visibleGroups() {
     return categoryGroups
@@ -1237,7 +1252,7 @@
     if (!p) return "";
     return String(p).split("~").map((n) => Number(n).toLocaleString("ko-KR")).join("~") + "원";
   }
-  function taskDone(t) { return !!t.done; }
+  function taskDone(t) { return !previewB && !!t.done; } // B그룹으로 보기: 완료 취소선 없음 (B그룹과 같게)
   function selectedTask() { return state.tasks.find((t) => t.id === selectedId) || null; }
 
   /* ---------- 필터 ---------- */
@@ -1472,7 +1487,7 @@
   let logShowAll = false;
   function renderLog() {
     const list = document.getElementById("logList");
-    const items = pruneLog(state.log).filter((e) => !hiddenStages[e.stage]);
+    const items = pruneLog(state.log).filter((e) => !hiddenStages[e.stage] && (viewRole() !== "B" || e.pub)); // B그룹은 공모주 기록만
     if (!items.length) { list.innerHTML = `<div class="muted">최근 5일 동안 바뀐 일정이 없습니다.</div>`; return; }
     const shown = logShowAll ? items : items.slice(0, 10);
     const todayIso = iso(today), yIso = addDays(iso(today), -1);
@@ -1744,9 +1759,9 @@
     document.getElementById("detailDate").textContent = `${prettyDate(task.date)} ${task.time || ""}`;
     const isIpo = task.type === "ipo";
     document.getElementById("detailPriceBox").style.display = isIpo ? "" : "none";
-    document.getElementById("detailPrice").textContent = fmtPrice(task.price) || (role === "owner" ? "미정 · 눌러서 입력" : "미정");
+    document.getElementById("detailPrice").textContent = fmtPrice(task.price) || (viewRole() === "owner" ? "미정 · 눌러서 입력" : "미정");
     document.getElementById("completeBtn").textContent = taskDone(task) ? "완료 해제" : "업무 완료";
-    if (role !== "owner") { body.innerHTML = ""; return; } // 보기 계정은 버튼 영역 없음 (상세 항목은 나중에 추가 예정)
+    if (viewRole() !== "owner") { body.innerHTML = ""; return; } // 보기 계정은 버튼 영역 없음 (상세 항목은 나중에 추가 예정)
 
     body.innerHTML = `
       <section class="section">
@@ -2113,7 +2128,7 @@
 
   function openEditStock(focusId) {
     const t = selectedTask(); if (!t) return;
-    if (role !== "owner") return; // 보기 계정은 수정 불가
+    if (!canEdit()) return; // 보기 계정·B그룹으로 보기 중에는 수정 불가
     const isIpo = t.type === "ipo";
     document.getElementById("editStockTitle").textContent = isIpo ? "종목 정보 수정" : "업무명 수정";
     document.getElementById("editStockName").value = t.stock;
@@ -2441,7 +2456,9 @@
   auth.onAuthStateChanged(async (user) => {
     stopSync();
     role = null; currentUid = null; readOnly = true; hiddenStages = {};
-    document.body.classList.remove("viewer", "role-b");
+    previewB = false; document.getElementById("previewBChk").checked = false;
+    document.body.classList.remove("viewer", "role-b", "preview-b");
+    document.getElementById("previewBWrap").style.display = "none";
     if (!user) {
       Store.clear(); // 로그아웃하면 이 기기의 캐시도 지움 (다음 사람에게 안 보이게)
       state = { tasks: [], log: [] }; selectedId = null;
@@ -2452,14 +2469,33 @@
     if (Store.cachedUid() !== user.uid) { state = { tasks: [], log: [] }; selectedId = null; } // 다른 계정 캐시는 버림
     currentUid = user.uid;
     if (role !== "owner") document.body.classList.add("viewer");
+    document.getElementById("previewBWrap").style.display = role === "owner" ? "flex" : "none";
     if (role === "B") {
       document.body.classList.add("role-b");
-      hiddenStages = { allocation: true, release: true, work: true, ir: true };
+      hiddenStages = { ...B_HIDDEN_STAGES };
     }
     loginGate.style.display = "none";
     render();
     startSync();
   });
+  // v1.6.6: 관리자 전용 "B그룹으로 보기" — 화면 표시만 B그룹처럼 바꿈 (데이터·권한·Firebase 연결은 그대로)
+  function setPreviewB(on) {
+    if (role !== "owner") on = false;
+    previewB = on;
+    document.getElementById("previewBChk").checked = on;
+    hiddenStages = on ? { ...B_HIDDEN_STAGES } : {};
+    document.body.classList.toggle("viewer", on);
+    document.body.classList.toggle("role-b", on);
+    document.body.classList.toggle("preview-b", on);
+    document.querySelectorAll(".sheet.open").forEach((s) => closeDialog(s.id)); // 열려 있던 등록·수정 창은 닫음
+    const t = selectedTask();
+    if (on && t && hiddenStages[t.stage]) { selectedId = null; closeDetail(); } // B그룹에 안 보이는 일정이면 상세창 닫음
+    render();
+    toast(on ? "B그룹이 보는 화면입니다 (수정 불가)" : "원래 화면으로 돌아왔습니다");
+  }
+  document.getElementById("previewBChk").addEventListener("change", (e) => setPreviewB(e.target.checked));
+  document.getElementById("previewBOff").addEventListener("click", () => setPreviewB(false));
+
   document.addEventListener("click", (e) => {
     if (!e.target.closest("#loginBtn")) return;
     auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch((err) => {
