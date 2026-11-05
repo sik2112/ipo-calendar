@@ -1,7 +1,8 @@
 <!--
   ipo-schedule-app.html
-  버전: v1.6.4 · 최종 수정: 2026-11-05
+  버전: v1.6.5 · 최종 수정: 2026-11-05
   변경 이력:
+    v1.6.5 (2026-11-05): [버그 수정] 저장 직후나 다른 기기에서 바뀐 내용이 들어올 때 선택한 일정이 풀려, 열린 상세창의 날짜·확정공모가·✎·날짜 변경 버튼이 안 눌리던 문제 수정 (선택 유지, 삭제된 일정이면 상세창 닫음)
     v1.6.4 (2026-11-05): 종목 확정공모가 추가 — 상세창 날짜 아래 확정공모가 칸을 누르거나 종목 등록·종목 정보 수정(✎)에서 입력, 최근 수정 기록에 반영
     v1.6.3 (2026-10-23): 사이드바 "마감예정" 삭제(기존 데이터 포함) → "최근 수정" 기록으로 교체
                           (등록·변경·삭제를 자동 기록, 5일 보관, 공모주 기록은 모두·내부 기록은 본인·A그룹만 봄,
@@ -562,7 +563,7 @@
       <div class="mark">IPO</div>
       <div>
         <h2>업무일정</h2>
-        <div class="muted">이 기기에 저장됩니다 · v1.6.4 (2026-11-05)</div>
+        <div class="muted">이 기기에 저장됩니다 · v1.6.5 (2026-11-05)</div>
       </div>
     </div>
     <div class="drawer-body">
@@ -1732,7 +1733,7 @@
   /* ---------- 상세 ---------- */
   function renderDetail() {
     const task = selectedTask();
-    if (!task) return;
+    if (!task) { closeDetail(); return; } // 선택한 일정이 없으면 (삭제 등) 상세창을 닫아 먹통 상태로 남지 않게
     const body = document.getElementById("detailBody");
 
     const tag = document.getElementById("detailStage");
@@ -2368,7 +2369,9 @@
     applyingRemote = true;
     state = normalize(mergeState(remotePub, needPriv ? remotePriv : null, needOwn ? remoteOwn : null, needOwn));
     prevSnap = snapOf(state.tasks); // 받은 데이터는 기록하지 않고, 이후 내 변경만 비교
-    selectedId = null;
+    // v1.6.5: 저장할 때마다 되돌아오는 변경 때문에 선택이 풀려 상세창 버튼이 먹통이 되던 문제 —
+    // 선택한 일정이 아직 있으면 그대로 유지하고, 지워졌을 때만 선택 해제
+    if (selectedId && !state.tasks.some((t) => t.id === selectedId)) selectedId = null;
     const first = !cloudSynced;
     cloudSynced = true; // 이 시점부터는 로컬 변경을 클라우드에 올려도 안전함
     render();
