@@ -1,7 +1,8 @@
 <!--
   ipo-schedule-app.html
-  버전: v1.6.3 · 최종 수정: 2026-10-23
+  버전: v1.6.4 · 최종 수정: 2026-11-05
   변경 이력:
+    v1.6.4 (2026-11-05): 종목 확정공모가 추가 — 상세창 날짜 아래 확정공모가 칸을 누르거나 종목 등록·종목 정보 수정(✎)에서 입력, 최근 수정 기록에 반영
     v1.6.3 (2026-10-23): 사이드바 "마감예정" 삭제(기존 데이터 포함) → "최근 수정" 기록으로 교체
                           (등록·변경·삭제를 자동 기록, 5일 보관, 공모주 기록은 모두·내부 기록은 본인·A그룹만 봄,
                           10분 안에 같은 일정을 다시 고치면 한 줄로 합침, 누르면 해당 일정으로 이동)
@@ -481,6 +482,7 @@
     body.viewer .detail-foot, body.viewer #editTitleBtn, body.viewer .add-group-btn,
     body.viewer #detailBody .btn { display: none !important; }
     body.viewer #detailDateBox { pointer-events: none; }
+    body.viewer #detailPriceBox { pointer-events: none; }
 
     @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 
@@ -560,7 +562,7 @@
       <div class="mark">IPO</div>
       <div>
         <h2>업무일정</h2>
-        <div class="muted">이 기기에 저장됩니다 · v1.6.3 (2026-10-23)</div>
+        <div class="muted">이 기기에 저장됩니다 · v1.6.4 (2026-11-05)</div>
       </div>
     </div>
     <div class="drawer-body">
@@ -601,8 +603,9 @@
           <h2 id="detailTitle" style="flex:1; min-width:0">-</h2>
           <button type="button" class="icon-btn" id="editTitleBtn" style="width:34px; height:34px; font-size:15px" aria-label="이름 수정">✎</button>
         </div>
-        <div class="meta" style="grid-template-columns:1fr">
+        <div class="meta" id="detailMeta" style="grid-template-columns:1fr">
           <button type="button" class="box" id="detailDateBox"><span>날짜</span><strong id="detailDate">-</strong></button>
+          <button type="button" class="box" id="detailPriceBox" style="display:none"><span>확정공모가</span><strong id="detailPrice">-</strong></button>
         </div>
       </div>
     </div>
@@ -660,6 +663,7 @@
       <div class="form-grid">
         <label>종목명<input id="editStockName" required></label>
         <label id="editStockBrokerLabel">증권사<input id="editStockBroker"></label>
+        <label id="editStockPriceLabel">확정공모가 <span class="muted" style="font-weight:400">(원, 미정이면 비워두세요)</span><input id="editStockPrice" inputmode="numeric" placeholder="예: 9600"></label>
       </div>
       <div class="modal-actions">
         <button class="btn" type="button" data-close="editStockDialog">취소</button>
@@ -708,6 +712,7 @@
       <div class="form-grid">
         <label>종목명<input id="stockName" required placeholder="예: A바이오"></label>
         <label>증권사<input id="stockBroker" placeholder="예: 한국투자증권"></label>
+        <label style="grid-column:1/3">확정공모가 <span class="muted" style="font-weight:400">(원, 미정이면 비워두세요)</span><input id="stockPrice" inputmode="numeric" placeholder="예: 9600"></label>
         <label class="chk-inline" style="grid-column:1/3"><input type="checkbox" id="stockIsSpac"> 스팩 종목 (수요1만 진행 — 종목명에 '스팩'이 있으면 자동 적용)</label>
         <label>수요예측 시작일(수요1)<input id="dateDemand1" type="date" required></label>
         <label style="display:none"><input id="dateDemand3" type="date" required></label>
@@ -886,7 +891,7 @@
   let prevSnap = null; // 직전 일정 상태 {id: "종목|증권사|유형|날짜"} — 비교용
   function snapOf(tasks) {
     const m = new Map();
-    tasks.forEach((t) => m.set(t.id, { stock: t.stock, broker: t.broker || "", stage: t.stage, date: t.date || "", type: t.type, pub: isPublicTask(t) }));
+    tasks.forEach((t) => m.set(t.id, { stock: t.stock, broker: t.broker || "", price: t.price || "", stage: t.stage, date: t.date || "", type: t.type, pub: isPublicTask(t) }));
     return m;
   }
   function shortDate(d) {
@@ -933,7 +938,7 @@
           out.push({ id: uid("log"), at, act: "edit", field: "date", tid: id, stock: t.stock, stage: t.stage, from: o.date, to: t.date, pub: t.pub });
         }
       }
-      ["stock", "broker"].forEach((f) => {
+      ["stock", "broker", "price"].forEach((f) => {
         if (o[f] === t[f]) return;
         const key = `${f}|${o.stock}|${o[f]}|${t[f]}`;
         if (renameSeen.has(key)) return;
@@ -1165,12 +1170,12 @@
 
   /* ---------- 데이터 ---------- */
   function isSpacName(name) { return /스팩/.test(name || ""); } // 종목명에 '스팩'이 들어가면 스팩으로 간주 (선언문: 저장 데이터가 없는 첫 실행에서도 먼저 호출 가능)
-  function makeIpoTasks(stock, dates, startOrder = 0, broker = "", isSpac = false) {
+  function makeIpoTasks(stock, dates, startOrder = 0, broker = "", isSpac = false, price = "") {
     const useStages = (isSpac || isSpacName(stock)) ? stages.filter((s) => s !== "수요3" && s !== "수요5") : stages;
     return useStages.map((stage, i) => {
       const key = stageKey[stage];
       return {
-        id: uid("task"), type: "ipo", stock, broker, stage: key, date: dates[key], time: stageDefaultTime[key],
+        id: uid("task"), type: "ipo", stock, broker, price, stage: key, date: dates[key], time: stageDefaultTime[key],
         order: startOrder + i, done: false
       };
     });
@@ -1206,7 +1211,7 @@
         const rawStage = t.stage === "demand" ? "demand1" : t.stage;
         const stage = stageLabel[rawStage] ? rawStage : "demand1";
         return {
-          id: t.id || uid("task"), type: t.type || "ipo", stock: t.stock || "(이름 없음)", broker: t.broker || "",
+          id: t.id || uid("task"), type: t.type || "ipo", stock: t.stock || "(이름 없음)", broker: t.broker || "", price: t.price || "",
           stage, date: typeof t.date === "string" ? t.date : "", time: t.time || stageDefaultTime[stage] || "09:00",
           order: Number(t.order) || 0,
           // v1.6.1: 체크리스트·알림·첨부는 삭제. 예전에 체크리스트를 모두 체크한 일정은 완료로 넘김
@@ -1222,6 +1227,15 @@
     };
   }
   function save() { Store.save(state); }
+  // 공모가: 저장은 숫자만("9600" 또는 밴드 "9600~11000"), 표시는 "9,600원" / "9,600~11,000원"
+  function cleanPrice(v) {
+    const nums = String(v || "").split(/[~\-–]/).map((s) => s.replace(/[^\d]/g, "")).filter(Boolean).slice(0, 2);
+    return nums.join("~");
+  }
+  function fmtPrice(p) {
+    if (!p) return "";
+    return String(p).split("~").map((n) => Number(n).toLocaleString("ko-KR")).join("~") + "원";
+  }
   function taskDone(t) { return !!t.done; }
   function selectedTask() { return state.tasks.find((t) => t.id === selectedId) || null; }
 
@@ -1473,6 +1487,7 @@
       if (e.act === "add") what = e.n > 1 ? `종목 등록 (${e.n}건)` : "등록";
       else if (e.act === "del") what = e.n > 1 ? `전체 삭제 (${e.n}건)` : "삭제";
       else if (e.field === "date") what = `${shortDate(e.from)} → ${shortDate(e.to)}`;
+      else if (e.field === "price") what = `확정공모가 ${esc(fmtPrice(e.from) || "없음")} → ${esc(fmtPrice(e.to) || "없음")}`;
       else what = `${e.field === "stock" ? "종목명" : "증권사"} ${esc(e.from || "없음")} → ${esc(e.to || "없음")}`;
       const exists = e.act !== "del" && state.tasks.some((t) => t.id === e.tid);
       return `${head}<button type="button" class="log-item${exists ? "" : " gone"}" data-log-tid="${exists ? e.tid : ""}">
@@ -1726,6 +1741,9 @@
     tag.style.color = stageColor[task.stage];
     document.getElementById("detailTitle").textContent = task.stock + (task.broker ? `(${task.broker})` : "");
     document.getElementById("detailDate").textContent = `${prettyDate(task.date)} ${task.time || ""}`;
+    const isIpo = task.type === "ipo";
+    document.getElementById("detailPriceBox").style.display = isIpo ? "" : "none";
+    document.getElementById("detailPrice").textContent = fmtPrice(task.price) || (role === "owner" ? "미정 · 눌러서 입력" : "미정");
     document.getElementById("completeBtn").textContent = taskDone(task) ? "완료 해제" : "업무 완료";
     if (role !== "owner") { body.innerHTML = ""; return; } // 보기 계정은 버튼 영역 없음 (상세 항목은 나중에 추가 예정)
 
@@ -2092,24 +2110,30 @@
   document.getElementById("editDateBtn").addEventListener("click", openDateDialog);
   document.getElementById("detailDateBox").addEventListener("click", openDateDialog);
 
-  document.getElementById("editTitleBtn").addEventListener("click", () => {
+  function openEditStock(focusId) {
     const t = selectedTask(); if (!t) return;
+    if (role !== "owner") return; // 보기 계정은 수정 불가
     const isIpo = t.type === "ipo";
-    document.getElementById("editStockTitle").textContent = isIpo ? "종목명 · 증권사 수정" : "업무명 수정";
+    document.getElementById("editStockTitle").textContent = isIpo ? "종목 정보 수정" : "업무명 수정";
     document.getElementById("editStockName").value = t.stock;
     document.getElementById("editStockBroker").value = t.broker || "";
+    document.getElementById("editStockPrice").value = t.price || "";
     document.getElementById("editStockBrokerLabel").style.display = isIpo ? "" : "none";
-    openDialog("editStockDialog", "editStockName");
-  });
+    document.getElementById("editStockPriceLabel").style.display = isIpo ? "" : "none";
+    openDialog("editStockDialog", focusId || "editStockName");
+  }
+  document.getElementById("editTitleBtn").addEventListener("click", () => openEditStock());
+  document.getElementById("detailPriceBox").addEventListener("click", () => openEditStock("editStockPrice"));
   onSubmit("editStockForm", () => {
     const t = selectedTask(); if (!t) return;
     const name = document.getElementById("editStockName").value.trim();
     const broker = document.getElementById("editStockBroker").value.trim();
+    const price = cleanPrice(document.getElementById("editStockPrice").value);
     if (!name) return;
     if (t.type === "ipo") {
       // 같은 종목의 다른 단계(수요1/3/5, 배정, 청약, 납입, 상장)도 함께 이름이 바뀌도록 종목명으로 묶어서 변경
       const oldStock = t.stock;
-      state.tasks.forEach((x) => { if (x.type === "ipo" && x.stock === oldStock) { x.stock = name; x.broker = broker; } });
+      state.tasks.forEach((x) => { if (x.type === "ipo" && x.stock === oldStock) { x.stock = name; x.broker = broker; x.price = price; } });
     } else {
       t.stock = name;
     }
@@ -2151,6 +2175,7 @@
     quickAddDate = null;
     document.getElementById("stockName").value = "";
     document.getElementById("stockBroker").value = "";
+    document.getElementById("stockPrice").value = "";
     document.getElementById("stockIsSpac").checked = false;
     document.getElementById("dateDemand1").value = b;
     document.getElementById("dateDemand3").value = addBizDays(b, 2);
@@ -2192,7 +2217,7 @@
     if (!t) return;
     const date = document.getElementById("releaseDate").value;
     const nt = {
-      id: uid("task"), type: "ipo", stock: t.stock, broker: t.broker, stage: "release", date, time: stageDefaultTime.release,
+      id: uid("task"), type: "ipo", stock: t.stock, broker: t.broker, price: t.price || "", stage: "release", date, time: stageDefaultTime.release,
       order: Math.max(0, ...state.tasks.map((x) => x.order || 0)) + 1, done: false
     };
     state.tasks.push(nt);
@@ -2234,7 +2259,8 @@
       payment: document.getElementById("datePayment").value,
       listing: document.getElementById("dateListing").value
     };
-    const tasks = makeIpoTasks(stock, dates, state.tasks.length, broker, isSpac);
+    const price = cleanPrice(document.getElementById("stockPrice").value);
+    const tasks = makeIpoTasks(stock, dates, state.tasks.length, broker, isSpac, price);
     state.tasks.push(...tasks);
     selectedId = tasks[0].id;
     viewDate = new Date(`${tasks[0].date}T00:00:00`); viewDate.setDate(1);
