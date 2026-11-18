@@ -1,6 +1,8 @@
 <!--
   ipo-schedule-app.html
-  버전: v1.6.10 · 최종 수정: 2026-11-05
+  버전: v1.6.11 · 최종 수정: 2026-11-18
+    v1.6.11 (2026-11-18): 상단에 "일정표" 보기 추가 — 이번 달 IPO 종목을 한 줄씩, 수요예측 기간·공모가·청약·배정·납입·상장일·상태를 표로 표시,
+                          공모가 밴드(band)를 확정공모가와 따로 입력·표시 (예전에 확정공모가 칸에 밴드를 넣은 종목은 밴드로 옮김)
   변경 이력:
     v1.6.10 (2026-11-05): 종목 이름이 한 줄로 끝나는 유형에서 마우스를 올려도 밑줄이 잘려 안 보이던 문제 수정 (줄 묶음 칸이 아래 3px까지는 그려지게)
     v1.6.9 (2026-11-05): 일정 보기 전용으로 방향 변경 — 완료 취소선, 상세창 "업무 완료" 버튼, 빠른 보기 "완료" 필터 삭제 (예전 완료 값은 데이터에 그대로 둠)
@@ -201,6 +203,19 @@
       font-size: 10.5px; white-space: nowrap; cursor: pointer;
     }
     .gantt-empty { padding: 16px; }
+    /* ---------- 일정표 보기 (v1.6.11): 종목 한 줄, 단계별 날짜를 글자로 ---------- */
+    .sched-wrap { min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; background: #fff; padding: 12px; }
+    .sched-table { border-collapse: collapse; width: 100%; min-width: 760px; font-size: 13px; }
+    .sched-table th, .sched-table td { border-bottom: 1px solid var(--line); padding: 9px 8px; text-align: center; white-space: nowrap; }
+    .sched-table thead th { background: #f3f5f8; color: var(--muted); font-weight: 900; font-size: 12px; position: sticky; top: -12px; z-index: 2; }
+    .sched-table tbody tr:hover { background: #fafbfc; }
+    .sched-table td.name { text-align: left; font-weight: 850; }
+    .sched-table td.name button, .sched-table .sd { border: 0; background: none; padding: 0; color: inherit; font: inherit; cursor: pointer; }
+    .sched-table td.name button:hover, .sched-table .sd:hover { text-decoration: underline; }
+    .sched-table .past { color: #a3aaa6; }
+    .sched-table .now { font-weight: 900; }
+    .sched-table .broker { color: var(--muted); font-size: 12px; }
+    .sched-badge { display: inline-block; border-radius: 999px; padding: 3px 9px; font-size: 11.5px; font-weight: 900; background: #eef0f2; color: var(--muted); }
     .week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); background: #fff; border-bottom: 1px solid var(--line); }
     .weekday { padding: 7px 2px; color: var(--muted); font-size: 11px; text-align: center; font-weight: 900; }
     .weekday.sun { color: var(--red); }
@@ -490,7 +505,7 @@
     body.viewer .detail-foot, body.viewer #editTitleBtn, body.viewer .add-group-btn,
     body.viewer #detailBody .btn { display: none !important; }
     body.viewer #detailDateBox { pointer-events: none; }
-    body.viewer #detailPriceBox { pointer-events: none; }
+    body.viewer #detailPriceBox, body.viewer #detailBandBox { pointer-events: none; }
     /* v1.6.6: 관리자 전용 "B그룹으로 보기" — 켜져 있으면 화면 아래쪽에 표시 (알림은 그 위로) */
     #previewBWrap { display: none; margin-top: 8px; }
     #previewBar { display: none; position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 95;
@@ -557,6 +572,7 @@
       <input class="search" id="searchInput" type="search" placeholder="일정 검색">
       <button class="filter-pill" id="filterPill"><span id="filterPillText">전체</span></button>
       <button class="filter-pill" id="viewToggleBtn">표 보기</button>
+      <button class="filter-pill" id="schedToggleBtn">일정표</button>
     </div>
 
     <div class="cal-wrap" id="calWrap">
@@ -567,6 +583,7 @@
       <div class="calendar" id="calendar" aria-label="월 달력"></div>
     </div>
     <div class="gantt-wrap" id="ganttWrap" style="display:none"></div>
+    <div class="sched-wrap" id="schedWrap" style="display:none"></div>
   </div>
 
   <div class="scrim" id="scrim"></div>
@@ -578,7 +595,7 @@
       <div class="mark">IPO</div>
       <div>
         <h2>업무일정</h2>
-        <div class="muted">이 기기에 저장됩니다 · v1.6.10 (2026-11-05)</div>
+        <div class="muted">이 기기에 저장됩니다 · v1.6.11 (2026-11-18)</div>
         <label class="chk-inline" id="previewBWrap"><input type="checkbox" id="previewBChk"> B그룹으로 보기</label>
       </div>
     </div>
@@ -622,6 +639,7 @@
         </div>
         <div class="meta" id="detailMeta" style="grid-template-columns:1fr">
           <button type="button" class="box" id="detailDateBox"><span>날짜</span><strong id="detailDate">-</strong></button>
+          <button type="button" class="box" id="detailBandBox" style="display:none"><span>공모가 밴드</span><strong id="detailBand">-</strong></button>
           <button type="button" class="box" id="detailPriceBox" style="display:none"><span>확정공모가</span><strong id="detailPrice">-</strong></button>
         </div>
       </div>
@@ -679,6 +697,7 @@
       <div class="form-grid">
         <label>종목명<input id="editStockName" required></label>
         <label id="editStockBrokerLabel">증권사<input id="editStockBroker"></label>
+        <label id="editStockBandLabel">공모가 밴드 <span class="muted" style="font-weight:400">(원, 예: 15000~17800)</span><input id="editStockBand" inputmode="numeric" placeholder="예: 15000~17800"></label>
         <label id="editStockPriceLabel">확정공모가 <span class="muted" style="font-weight:400">(원, 미정이면 비워두세요)</span><input id="editStockPrice" inputmode="numeric" placeholder="예: 9600"></label>
       </div>
       <div class="modal-actions">
@@ -728,7 +747,8 @@
       <div class="form-grid">
         <label>종목명<input id="stockName" required placeholder="예: A바이오"></label>
         <label>증권사<input id="stockBroker" placeholder="예: 한국투자증권"></label>
-        <label style="grid-column:1/3">확정공모가 <span class="muted" style="font-weight:400">(원, 미정이면 비워두세요)</span><input id="stockPrice" inputmode="numeric" placeholder="예: 9600"></label>
+        <label>공모가 밴드 <span class="muted" style="font-weight:400">(원)</span><input id="stockBand" inputmode="numeric" placeholder="예: 15000~17800"></label>
+        <label>확정공모가 <span class="muted" style="font-weight:400">(미정이면 비움)</span><input id="stockPrice" inputmode="numeric" placeholder="예: 9600"></label>
         <label class="chk-inline" style="grid-column:1/3"><input type="checkbox" id="stockIsSpac"> 스팩 종목 (수요1만 진행 — 종목명에 '스팩'이 있으면 자동 적용)</label>
         <label>수요예측 시작일(수요1)<input id="dateDemand1" type="date" required></label>
         <label style="display:none"><input id="dateDemand3" type="date" required></label>
@@ -906,7 +926,7 @@
   let prevSnap = null; // 직전 일정 상태 {id: "종목|증권사|유형|날짜"} — 비교용
   function snapOf(tasks) {
     const m = new Map();
-    tasks.forEach((t) => m.set(t.id, { stock: t.stock, broker: t.broker || "", price: t.price || "", stage: t.stage, date: t.date || "", type: t.type, pub: isPublicTask(t) }));
+    tasks.forEach((t) => m.set(t.id, { stock: t.stock, broker: t.broker || "", band: t.band || "", price: t.price || "", stage: t.stage, date: t.date || "", type: t.type, pub: isPublicTask(t) }));
     return m;
   }
   function shortDate(d) {
@@ -953,7 +973,7 @@
           out.push({ id: uid("log"), at, act: "edit", field: "date", tid: id, stock: t.stock, stage: t.stage, from: o.date, to: t.date, pub: t.pub });
         }
       }
-      ["stock", "broker", "price"].forEach((f) => {
+      ["stock", "broker", "band", "price"].forEach((f) => {
         if (o[f] === t[f]) return;
         const key = `${f}|${o.stock}|${o[f]}|${t[f]}`;
         if (renameSeen.has(key)) return;
@@ -1040,7 +1060,7 @@
   let quickAddDate = null; // 달력에서 빈 칸을 눌러 일정 등록을 시작했을 때, 그 날짜를 기억해둠
   let filter = "all";
   let search = "";
-  let viewMode = "calendar"; // "calendar" | "gantt"
+  let viewMode = "calendar"; // "calendar" | "gantt" | "sched"
 
   /* ---------- 사이드바 카테고리 그룹 ---------- */
   // groups[].children[].stage 가 있으면 실제 일정 단계와 연결되어 필터링에 사용됨.
@@ -1189,12 +1209,12 @@
 
   /* ---------- 데이터 ---------- */
   function isSpacName(name) { return /스팩/.test(name || ""); } // 종목명에 '스팩'이 들어가면 스팩으로 간주 (선언문: 저장 데이터가 없는 첫 실행에서도 먼저 호출 가능)
-  function makeIpoTasks(stock, dates, startOrder = 0, broker = "", isSpac = false, price = "") {
+  function makeIpoTasks(stock, dates, startOrder = 0, broker = "", isSpac = false, price = "", band = "") {
     const useStages = (isSpac || isSpacName(stock)) ? stages.filter((s) => s !== "수요3" && s !== "수요5") : stages;
     return useStages.map((stage, i) => {
       const key = stageKey[stage];
       return {
-        id: uid("task"), type: "ipo", stock, broker, price, stage: key, date: dates[key], time: stageDefaultTime[key],
+        id: uid("task"), type: "ipo", stock, broker, band, price, stage: key, date: dates[key], time: stageDefaultTime[key],
         order: startOrder + i, done: false
       };
     });
@@ -1230,7 +1250,10 @@
         const rawStage = t.stage === "demand" ? "demand1" : t.stage;
         const stage = stageLabel[rawStage] ? rawStage : "demand1";
         return {
-          id: t.id || uid("task"), type: t.type || "ipo", stock: t.stock || "(이름 없음)", broker: t.broker || "", price: t.price || "",
+          id: t.id || uid("task"), type: t.type || "ipo", stock: t.stock || "(이름 없음)", broker: t.broker || "",
+          // v1.6.11: 공모가 밴드를 따로 저장. 예전에 확정공모가 칸에 밴드(~)를 넣어 둔 종목은 밴드로 옮김
+          band: t.band || (/~/.test(t.price || "") ? t.price : ""),
+          price: /~/.test(t.price || "") && !t.band ? "" : (t.price || ""),
           stage, date: typeof t.date === "string" ? t.date : "", time: t.time || stageDefaultTime[stage] || "09:00",
           order: Number(t.order) || 0,
           // v1.6.1: 체크리스트·알림·첨부는 삭제. 예전에 체크리스트를 모두 체크한 일정은 완료로 넘김
@@ -1287,12 +1310,16 @@
     renderLog();
     renderCalendar();
     renderGantt();
+    renderSched();
     renderDetail();
     document.getElementById("filterPillText").textContent = filterName(filter);
     document.getElementById("filterPill").classList.toggle("on", filter !== "all");
     document.getElementById("calWrap").style.display = viewMode === "calendar" ? "" : "none";
     document.getElementById("ganttWrap").style.display = viewMode === "gantt" ? "" : "none";
-    document.getElementById("viewToggleBtn").textContent = viewMode === "calendar" ? "표 보기" : "달력 보기";
+    document.getElementById("schedWrap").style.display = viewMode === "sched" ? "" : "none";
+    // 보고 있는 보기의 버튼은 "달력 보기"로 바뀌어 누르면 달력으로 돌아감
+    document.getElementById("viewToggleBtn").textContent = viewMode === "gantt" ? "달력 보기" : "표 보기";
+    document.getElementById("schedToggleBtn").textContent = viewMode === "sched" ? "달력 보기" : "일정표";
     fitDayEvents();
     save();
   }
@@ -1383,8 +1410,88 @@
     });
   }
   document.getElementById("viewToggleBtn").addEventListener("click", () => {
-    viewMode = viewMode === "calendar" ? "gantt" : "calendar";
+    viewMode = viewMode === "gantt" ? "calendar" : "gantt";
     render();
+  });
+  document.getElementById("schedToggleBtn").addEventListener("click", () => {
+    viewMode = viewMode === "sched" ? "calendar" : "sched";
+    render();
+  });
+
+  /* ---------- 일정표 보기 (v1.6.11): 이번 달에 일정이 있는 IPO 종목을 한 줄씩, 단계별 날짜를 글자로 ---------- */
+  function renderSched() {
+    const wrap = document.getElementById("schedWrap");
+    if (viewMode !== "sched") { wrap.innerHTML = ""; return; }
+    const y = viewDate.getFullYear(), m = viewDate.getMonth();
+    const todayIso = iso(today);
+    const byStock = {}, order = [];
+    filteredTasks().filter((t) => t.type === "ipo" && t.stage !== "release").forEach((t) => {
+      if (!byStock[t.stock]) { byStock[t.stock] = { broker: t.broker, price: t.price, band: t.band, st: {} }; order.push(t.stock); }
+      const s = byStock[t.stock];
+      s.st[t.stage] = t;
+      if (!s.broker && t.broker) s.broker = t.broker;
+      if (!s.band && t.band) s.band = t.band;
+      if (!s.price && t.price) s.price = t.price;
+    });
+    const inMonth = (d) => { if (!d) return false; const x = new Date(`${d}T00:00:00`); return x.getFullYear() === y && x.getMonth() === m; };
+    const stocks = order
+      .filter((n) => Object.values(byStock[n].st).some((t) => inMonth(t.date)))
+      .sort((a, b) => {
+        const da = byStock[a].st.demand1?.date || "9999", dbb = byStock[b].st.demand1?.date || "9999";
+        return da.localeCompare(dbb) || a.localeCompare(b);
+      });
+    if (!stocks.length) { wrap.innerHTML = `<div class="gantt-empty muted">이번 달에 표시할 IPO 일정이 없습니다.</div>`; return; }
+
+    const md = (d) => { const x = new Date(`${d}T00:00:00`); return `${String(x.getMonth() + 1).padStart(2, "0")}.${String(x.getDate()).padStart(2, "0")} (${"일월화수목금토"[x.getDay()]})`; };
+    const cls = (d) => d < todayIso ? "past" : d === todayIso ? "now" : "";
+    const dateBtn = (t, color) => t && t.date
+      ? `<button type="button" class="sd ${cls(t.date)}" data-id="${t.id}"${t.date === todayIso ? ` style="color:${color}"` : ""}>${md(t.date)}</button>`
+      : `<span class="muted">-</span>`;
+    const showAlloc = !hiddenStages.allocation;
+    const cols = [...(showAlloc ? ["allocation"] : []), "subscription", "payment", "listing"]; // 순서는 등록 단계(stages)와 같게
+    const colName = { subscription: "청약일", allocation: "배정일", payment: "납입일", listing: "상장일" };
+
+    const head = `<tr><th>수요예측</th><th>종목명</th><th>주관사</th><th>공모가 밴드(원)</th><th>확정공모가(원)</th>${cols.map((c) => `<th>${colName[c]}</th>`).join("")}<th>상태</th></tr>`;
+    const body = stocks.map((name) => {
+      const s = byStock[name];
+      const d1 = s.st.demand1, dEnd = s.st.demand5 || s.st.demand3;
+      // 수요예측 기간: 수1 ~ 수5 (스팩은 수1 다음 영업일까지)
+      let demand = `<span class="muted">-</span>`, running = false;
+      if (d1 && d1.date) {
+        const endDate = dEnd && dEnd.date ? dEnd.date : (isSpacName(name) ? addBizDays(d1.date, 1) : "");
+        const endCls = endDate ? cls(endDate) : cls(d1.date);
+        running = !!(d1.date <= todayIso && endDate && todayIso <= endDate);
+        demand = `<button type="button" class="sd ${running ? "now" : endCls}" data-id="${d1.id}"${running ? ` style="color:${stageColor.demand1}"` : ""}>${md(d1.date).slice(0, 5)}${endDate && endDate !== d1.date ? ` ~ ${md(endDate).slice(0, 5)}` : ""}</button>`;
+      }
+      // 상태: 오늘 일정 > 다음 일정 > 끝
+      const all = Object.values(s.st).filter((t) => t.date).sort((a, b) => a.date.localeCompare(b.date) || stagePriority[a.stage] - stagePriority[b.stage]);
+      const label = (st) => st.startsWith("demand") ? "수요예측" : stageLabel[st];
+      const todayT = all.find((t) => t.date === todayIso);
+      const nextT = all.find((t) => t.date > todayIso);
+      let badge;
+      if (running) badge = `<span class="sched-badge" style="background:${stageColor.demand1};color:#fff">수요예측 중</span>`;
+      else if (todayT) badge = `<span class="sched-badge" style="background:${stageColor[todayT.stage]};color:#fff">오늘 ${label(todayT.stage)}</span>`;
+      else if (nextT) badge = `<span class="sched-badge">${label(nextT.stage)} 대기</span>`;
+      else badge = `<span class="sched-badge" style="background:#f6f7f8;color:#a3aaa6">완료</span>`;
+      const firstId = (d1 || all[0] || {}).id || "";
+      return `<tr>
+        <td>${demand}</td>
+        <td class="name"><button type="button" data-id="${firstId}">${esc(name)}</button></td>
+        <td class="broker">${esc(s.broker || "-")}</td>
+        <td>${s.band ? esc(fmtPrice(s.band).replace(/원$/, "")) : `<span class="muted">-</span>`}</td>
+        <td>${s.price ? `<b>${esc(fmtPrice(s.price).replace(/원$/, ""))}</b>` : `<span class="muted">미정</span>`}</td>
+        ${cols.map((c) => `<td>${dateBtn(s.st[c], stageColor[c])}</td>`).join("")}
+        <td>${badge}</td>
+      </tr>`;
+    }).join("");
+    wrap.innerHTML = `<table class="sched-table"><thead>${head}</thead><tbody>${body}</tbody></table>`;
+  }
+  document.getElementById("schedWrap").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-id]");
+    if (!b || !b.dataset.id) return;
+    selectedId = b.dataset.id;
+    render();
+    openDetail();
   });
 
   function filterHtml() {
@@ -1503,6 +1610,7 @@
       if (e.act === "add") what = e.n > 1 ? `종목 등록 (${e.n}건)` : "등록";
       else if (e.act === "del") what = e.n > 1 ? `전체 삭제 (${e.n}건)` : "삭제";
       else if (e.field === "date") what = `${shortDate(e.from)} → ${shortDate(e.to)}`;
+      else if (e.field === "band") what = `공모가 밴드 ${esc(fmtPrice(e.from) || "없음")} → ${esc(fmtPrice(e.to) || "없음")}`;
       else if (e.field === "price") what = `확정공모가 ${esc(fmtPrice(e.from) || "없음")} → ${esc(fmtPrice(e.to) || "없음")}`;
       else what = `${e.field === "stock" ? "종목명" : "증권사"} ${esc(e.from || "없음")} → ${esc(e.to || "없음")}`;
       const exists = e.act !== "del" && state.tasks.some((t) => t.id === e.tid);
@@ -1759,6 +1867,8 @@
     document.getElementById("detailDate").textContent = prettyDate(task.date); // v1.6.7: 시간 표시 안 함
     const isIpo = task.type === "ipo";
     document.getElementById("detailPriceBox").style.display = isIpo ? "" : "none";
+    document.getElementById("detailBandBox").style.display = isIpo ? "" : "none";
+    document.getElementById("detailBand").textContent = fmtPrice(task.band) || (viewRole() === "owner" ? "미정 · 눌러서 입력" : "미정");
     document.getElementById("detailPrice").textContent = fmtPrice(task.price) || (viewRole() === "owner" ? "미정 · 눌러서 입력" : "미정");
     if (viewRole() !== "owner") { body.innerHTML = ""; return; } // 보기 계정은 버튼 영역 없음 (상세 항목은 나중에 추가 예정)
 
@@ -2132,22 +2242,26 @@
     document.getElementById("editStockName").value = t.stock;
     document.getElementById("editStockBroker").value = t.broker || "";
     document.getElementById("editStockPrice").value = t.price || "";
+    document.getElementById("editStockBand").value = t.band || "";
+    document.getElementById("editStockBandLabel").style.display = isIpo ? "" : "none";
     document.getElementById("editStockBrokerLabel").style.display = isIpo ? "" : "none";
     document.getElementById("editStockPriceLabel").style.display = isIpo ? "" : "none";
     openDialog("editStockDialog", focusId || "editStockName");
   }
   document.getElementById("editTitleBtn").addEventListener("click", () => openEditStock());
   document.getElementById("detailPriceBox").addEventListener("click", () => openEditStock("editStockPrice"));
+  document.getElementById("detailBandBox").addEventListener("click", () => openEditStock("editStockBand"));
   onSubmit("editStockForm", () => {
     const t = selectedTask(); if (!t) return;
     const name = document.getElementById("editStockName").value.trim();
     const broker = document.getElementById("editStockBroker").value.trim();
     const price = cleanPrice(document.getElementById("editStockPrice").value);
+    const band = cleanPrice(document.getElementById("editStockBand").value);
     if (!name) return;
     if (t.type === "ipo") {
       // 같은 종목의 다른 단계(수요1/3/5, 배정, 청약, 납입, 상장)도 함께 이름이 바뀌도록 종목명으로 묶어서 변경
       const oldStock = t.stock;
-      state.tasks.forEach((x) => { if (x.type === "ipo" && x.stock === oldStock) { x.stock = name; x.broker = broker; x.price = price; } });
+      state.tasks.forEach((x) => { if (x.type === "ipo" && x.stock === oldStock) { x.stock = name; x.broker = broker; x.band = band; x.price = price; } });
     } else {
       t.stock = name;
     }
@@ -2181,6 +2295,7 @@
     document.getElementById("stockName").value = "";
     document.getElementById("stockBroker").value = "";
     document.getElementById("stockPrice").value = "";
+    document.getElementById("stockBand").value = "";
     document.getElementById("stockIsSpac").checked = false;
     document.getElementById("dateDemand1").value = b;
     document.getElementById("dateDemand3").value = addBizDays(b, 2);
@@ -2222,7 +2337,7 @@
     if (!t) return;
     const date = document.getElementById("releaseDate").value;
     const nt = {
-      id: uid("task"), type: "ipo", stock: t.stock, broker: t.broker, price: t.price || "", stage: "release", date, time: stageDefaultTime.release,
+      id: uid("task"), type: "ipo", stock: t.stock, broker: t.broker, band: t.band || "", price: t.price || "", stage: "release", date, time: stageDefaultTime.release,
       order: Math.max(0, ...state.tasks.map((x) => x.order || 0)) + 1, done: false
     };
     state.tasks.push(nt);
@@ -2265,7 +2380,8 @@
       listing: document.getElementById("dateListing").value
     };
     const price = cleanPrice(document.getElementById("stockPrice").value);
-    const tasks = makeIpoTasks(stock, dates, state.tasks.length, broker, isSpac, price);
+    const band = cleanPrice(document.getElementById("stockBand").value);
+    const tasks = makeIpoTasks(stock, dates, state.tasks.length, broker, isSpac, price, band);
     state.tasks.push(...tasks);
     selectedId = tasks[0].id;
     viewDate = new Date(`${tasks[0].date}T00:00:00`); viewDate.setDate(1);
