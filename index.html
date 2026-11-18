@@ -1,6 +1,7 @@
 <!--
   ipo-schedule-app.html
-  버전: v1.6.11 · 최종 수정: 2026-11-18
+  버전: v1.6.12 · 최종 수정: 2026-11-18
+    v1.6.12 (2026-11-18): 표(간트) 보기 삭제 — 상단 보기 전환은 달력/일정표만
     v1.6.11 (2026-11-18): 상단에 "일정표" 보기 추가 — 이번 달 IPO 종목을 한 줄씩, 수요예측 기간·공모가·청약·배정·납입·상장일·상태를 표로 표시,
                           공모가 밴드(band)를 확정공모가와 따로 입력·표시 (예전에 확정공모가 칸에 밴드를 넣은 종목은 밴드로 옮김)
   변경 이력:
@@ -183,25 +184,6 @@
     .filter-pill.on { background: var(--soft); border-color: var(--green); color: var(--green); }
 
     .cal-wrap { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; }
-    /* ---------- 표(간트) 보기 ---------- */
-    .gantt-wrap { min-height: 0; overflow: auto; background: #fff; }
-    .gantt-scroll { overflow: auto; -webkit-overflow-scrolling: touch; height: 100%; }
-    .gantt-table { border-collapse: collapse; font-size: 11px; }
-    .gantt-table th, .gantt-table td { border: 1px solid var(--line); padding: 0; text-align: center; }
-    .gantt-table thead th { padding: 6px 2px; background: #fbfcfb; position: sticky; top: 0; z-index: 2; font-weight: 900; color: var(--muted); }
-    .gantt-table thead th.sun { color: var(--red); }
-    .gantt-table thead th.sat { color: var(--blue); }
-    .gantt-table .stock-col {
-      position: sticky; left: 0; background: #fff; z-index: 1; text-align: left;
-      min-width: 128px; max-width: 128px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-      padding: 6px 8px; font-weight: 850; font-size: 12px;
-    }
-    .gantt-table thead th.stock-col { z-index: 3; }
-    .gantt-table .day-col { min-width: 42px; width: 42px; height: 30px; }
-    .gantt-cell {
-      display: block; width: 100%; height: 100%; border: 0; font-weight: 900;
-      font-size: 10.5px; white-space: nowrap; cursor: pointer;
-    }
     .gantt-empty { padding: 16px; }
     /* ---------- 일정표 보기 (v1.6.11): 종목 한 줄, 단계별 날짜를 글자로 ---------- */
     .sched-wrap { min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; background: #fff; padding: 12px; }
@@ -571,7 +553,6 @@
     <div class="subbar">
       <input class="search" id="searchInput" type="search" placeholder="일정 검색">
       <button class="filter-pill" id="filterPill"><span id="filterPillText">전체</span></button>
-      <button class="filter-pill" id="viewToggleBtn">표 보기</button>
       <button class="filter-pill" id="schedToggleBtn">일정표</button>
     </div>
 
@@ -582,7 +563,6 @@
       </div>
       <div class="calendar" id="calendar" aria-label="월 달력"></div>
     </div>
-    <div class="gantt-wrap" id="ganttWrap" style="display:none"></div>
     <div class="sched-wrap" id="schedWrap" style="display:none"></div>
   </div>
 
@@ -595,7 +575,7 @@
       <div class="mark">IPO</div>
       <div>
         <h2>업무일정</h2>
-        <div class="muted">이 기기에 저장됩니다 · v1.6.11 (2026-11-18)</div>
+        <div class="muted">이 기기에 저장됩니다 · v1.6.12 (2026-11-18)</div>
         <label class="chk-inline" id="previewBWrap"><input type="checkbox" id="previewBChk"> B그룹으로 보기</label>
       </div>
     </div>
@@ -1043,7 +1023,7 @@
   const stageShort = { demand1: "수1", demand3: "수3", demand5: "수5", allocation: "배", subscription: "청", payment: "납", listing: "상", release: "해", work: "업", ir: "IR" };
   // 달력 묶음 줄 태그용: 수요만 두 글자로 줄여 [상장]·[청약] 등과 괄호 폭을 맞춤
   const stageTag = { ...stageLabel, demand1: "수１", demand3: "수３", demand5: "수５", ir: "ＩＲ" }; // 숫자는 전각(１３５)으로 써서 한글 한 글자와 폭을 맞춤
-  // 달력 알약·사이드바 점·상세 태그에 쓰는 색(가독성 위주). 표(간트) 채우기 색은 renderGantt의 stageFill을 따로 씀
+  // 달력 알약·사이드바 점·상세 태그에 쓰는 색(가독성 위주)
   const stageColor = { demand1: "#3b7dc9", demand3: "#3b7dc9", demand5: "#3b7dc9", allocation: "#9c6b13", subscription: "#4a4f54", payment: "#1f8a76", listing: "#c94f3e", release: "#c94f3e", work: "#5b6b73", ir: "#5b6b73" }; // 해제는 매도일이라 상장과 같은 빨강
   // 같은 날 여러 단계가 겹칠 때 위에서부터 보여줄 순서 (상장 > 납입 > 청약 > 수요예측 > 배정 > 업무/IR)
   const stagePriority = {
@@ -1060,7 +1040,7 @@
   let quickAddDate = null; // 달력에서 빈 칸을 눌러 일정 등록을 시작했을 때, 그 날짜를 기억해둠
   let filter = "all";
   let search = "";
-  let viewMode = "calendar"; // "calendar" | "gantt" | "sched"
+  let viewMode = "calendar"; // "calendar" | "sched" (v1.6.12: 표(간트) 보기 삭제)
 
   /* ---------- 사이드바 카테고리 그룹 ---------- */
   // groups[].children[].stage 가 있으면 실제 일정 단계와 연결되어 필터링에 사용됨.
@@ -1309,16 +1289,13 @@
     renderCategoryTree();
     renderLog();
     renderCalendar();
-    renderGantt();
     renderSched();
     renderDetail();
     document.getElementById("filterPillText").textContent = filterName(filter);
     document.getElementById("filterPill").classList.toggle("on", filter !== "all");
     document.getElementById("calWrap").style.display = viewMode === "calendar" ? "" : "none";
-    document.getElementById("ganttWrap").style.display = viewMode === "gantt" ? "" : "none";
     document.getElementById("schedWrap").style.display = viewMode === "sched" ? "" : "none";
     // 보고 있는 보기의 버튼은 "달력 보기"로 바뀌어 누르면 달력으로 돌아감
-    document.getElementById("viewToggleBtn").textContent = viewMode === "gantt" ? "달력 보기" : "표 보기";
     document.getElementById("schedToggleBtn").textContent = viewMode === "sched" ? "달력 보기" : "일정표";
     fitDayEvents();
     save();
@@ -1349,70 +1326,6 @@
   let fitTimer = null;
   window.addEventListener("resize", () => { clearTimeout(fitTimer); fitTimer = setTimeout(fitDayEvents, 120); });
 
-  /* ---------- 표(간트) 보기: 종목을 한 줄로, 단계를 날짜 칸에 색으로 표시 ---------- */
-  function renderGantt() {
-    const wrap = document.getElementById("ganttWrap");
-    const y = viewDate.getFullYear(), m = viewDate.getMonth();
-    const lastDay = new Date(y, m + 1, 0).getDate();
-    // 최종 확정 배색: 수요예측=파랑, 배정=노랑, 청약=진회색, 납입=민트, 상장=빨강
-    const ganttColor = {
-      demand1: "#3b7dc9", demand3: "#3b7dc9", demand5: "#3b7dc9",
-      allocation: "#d9a441", subscription: "#4a4f54", payment: "#2fb39c", listing: "#c94f3e", release: "#c94f3e"
-    };
-    const ganttText = { allocation: "#4a350c", payment: "#04332c" };
-
-    const byStock = {};
-    const stockOrder = [];
-    filteredTasks().filter((t) => t.type === "ipo").forEach((t) => {
-      if (!byStock[t.stock]) { byStock[t.stock] = { broker: t.broker, stages: {} }; stockOrder.push(t.stock); }
-      byStock[t.stock].stages[t.stage === "release" ? t.id : t.stage] = t; // 해제는 여러 건일 수 있어 id로 구분
-    });
-    const stocks = stockOrder
-      .filter((name) => Object.values(byStock[name].stages).some((t) => {
-        if (!t.date) return false;
-        const d = new Date(`${t.date}T00:00:00`);
-        return d.getFullYear() === y && d.getMonth() === m;
-      }))
-      .sort((a, b) => (byStock[a].stages.demand1?.date || "").localeCompare(byStock[b].stages.demand1?.date || ""));
-
-    if (!stocks.length) {
-      wrap.innerHTML = `<div class="gantt-empty muted">이번 달에 표시할 IPO 일정이 없습니다.</div>`;
-      return;
-    }
-
-    let headHtml = `<th class="stock-col">종목명(주관사)</th>`;
-    for (let d = 1; d <= lastDay; d++) {
-      const dow = new Date(y, m, d).getDay();
-      const holidayName = holidays[iso(new Date(y, m, d))];
-      headHtml += `<th class="day-col ${dow === 0 || holidayName ? "sun" : ""} ${dow === 6 && !holidayName ? "sat" : ""}">${d}</th>`;
-    }
-
-    const bodyHtml = stocks.map((name) => {
-      const info = byStock[name];
-      let row = `<td class="stock-col">${esc(name)}${info.broker ? `(${esc(info.broker)})` : ""}</td>`;
-      for (let d = 1; d <= lastDay; d++) {
-        const dIso = iso(new Date(y, m, d));
-        const hit = Object.values(info.stages).find((t) => t.date === dIso);
-        row += `<td class="day-col">${hit
-          ? `<button type="button" class="gantt-cell" style="background:${ganttColor[hit.stage]};color:${ganttText[hit.stage] || "#fff"}" data-id="${hit.id}" title="[${stageLabel[hit.stage]}] ${esc(name)}">${stageLabel[hit.stage]}</button>`
-          : ""}</td>`;
-      }
-      return `<tr>${row}</tr>`;
-    }).join("");
-
-    wrap.innerHTML = `<div class="gantt-scroll"><table class="gantt-table"><thead><tr>${headHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`;
-    wrap.querySelectorAll("[data-id]").forEach((b) => {
-      b.addEventListener("click", () => {
-        selectedId = b.dataset.id;
-        render();
-        openDetail();
-      });
-    });
-  }
-  document.getElementById("viewToggleBtn").addEventListener("click", () => {
-    viewMode = viewMode === "gantt" ? "calendar" : "gantt";
-    render();
-  });
   document.getElementById("schedToggleBtn").addEventListener("click", () => {
     viewMode = viewMode === "sched" ? "calendar" : "sched";
     render();
@@ -2199,21 +2112,6 @@
     let cooldown = false;
     el.addEventListener("wheel", (e) => {
       if (Math.abs(e.deltaY) < Math.abs(e.deltaX)) return; // 가로 스크롤은 무시
-      e.preventDefault();
-      if (cooldown) return;
-      viewDate.setMonth(viewDate.getMonth() + (e.deltaY > 0 ? 1 : -1));
-      render();
-      cooldown = true;
-      setTimeout(() => { cooldown = false; }, 450);
-    }, { passive: false });
-  })();
-
-  /* ---------- 표(간트) 보기: PC 마우스 휠로 월 이동 (모바일은 좌우 스와이프 없음 — 표를 옆으로 밀어 볼 때 월이 넘어가지 않도록, 월 이동은 버튼으로만) ---------- */
-  (function ganttNav() {
-    const el = document.getElementById("ganttWrap");
-    let cooldown = false;
-    el.addEventListener("wheel", (e) => {
-      if (Math.abs(e.deltaY) < Math.abs(e.deltaX)) return; // 표 가로 스크롤(날짜 넘기기)은 그대로 둠
       e.preventDefault();
       if (cooldown) return;
       viewDate.setMonth(viewDate.getMonth() + (e.deltaY > 0 ? 1 : -1));
